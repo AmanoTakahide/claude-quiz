@@ -139,6 +139,7 @@
   var K_RUN = PREFIX + "InProgress";
   var K_PREFS = PREFIX + "Prefs";
   var K_TIMER = PREFIX + "Timer";
+  var K_BACKUP = PREFIX + "Backup";
   var storageOK = true;
   function load(key, def) {
     try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch (e) { storageOK = false; return def; }
@@ -370,12 +371,209 @@
       r.order.every(function (id) { return QMAP[id]; });
   }
 
+  /* ---------- 記録の保存・取り込み（手動で端末間をつなぐ） ---------- */
+  /*XFER_BEGIN*/
+  var XFER_VERSION = 1;
+  function examKey() { return PREFIX.indexOf("Associate") >= 0 ? "associate" : "developer"; }
+  function numOr(x) { return typeof x === "number" && isFinite(x) ? x : 0; }
+  function okCount(arr) { return (arr || []).filter(function (x) { return x && x.ok; }).length; }
+
+  // 問題別成績の合算。同じ記録を何度読み込んでも結果が変わらないように、正誤の履歴は ts で重複を除く。
+  // 30件より古い分は履歴から消えているので、件数（n・c）の差分から推定して足す（端末をまたいで30件を超えた場合は、わずかな誤差が出ることがある）。
+  function mergeQStats(local, incoming) {
+    var out = {}, ids = {};
+    Object.keys(local || {}).forEach(function (k) { ids[k] = true; });
+    Object.keys(incoming || {}).forEach(function (k) { ids[k] = true; });
+    Object.keys(ids).forEach(function (id) {
+      var a = local && typeof local[id] === "object" ? local[id] : null;
+      var b = incoming && typeof incoming[id] === "object" ? incoming[id] : null;
+      if (!a && !b) return;
+      var ha = (a && a.hist) || [], hb = (b && b.hist) || [];
+      var seen = {}, uniq = [];
+      ha.concat(hb).forEach(function (x) {
+        if (!x || typeof x.ts !== "number") return;
+        var key = x.ts + ":" + (x.ok ? "1" : "0");
+        if (seen[key]) return;
+        seen[key] = true;
+        uniq.push({ ts: x.ts, ok: !!x.ok });
+      });
+      uniq.sort(function (p, q) { return p.ts - q.ts; });
+      var olderN = Math.max(numOr(a && a.n) - ha.length, numOr(b && b.n) - hb.length, 0);
+      var olderC = Math.max(numOr(a && a.c) - okCount(ha), numOr(b && b.c) - okCount(hb), 0);
+      var n = olderN + uniq.length;
+      var c = olderC + okCount(uniq);
+      var last = null, lastAt = null;
+      if (uniq.length) { last = uniq[uniq.length - 1].ok; lastAt = uniq[uniq.length - 1].ts; }
+      else {
+        [a, b].forEach(function (s) {
+          if (s && typeof s.lastAt === "number" && (lastAt === null || s.lastAt > lastAt)) { lastAt = s.lastAt; last = !!s.last; }
+        });
+      }
+      out[id] = { n: n, c: Math.min(c, n), last: last, lastAt: lastAt, hist: uniq.slice(-30) };
+    });
+    return out;
+  }
+
+  // 履歴の合算。回の開始時刻（id）で同じものを1つにする。回答数が多い方、同数なら「中断」でない方を残す。
+  function mergeHistory(local, incoming) {
+    var map = {}, out = [];
+    (local || []).concat(incoming || []).forEach(function (e) {
+      if (!e || typeof e !== "object" || typeof e.id !== "number") return;
+      var cur = map[e.id];
+      if (!cur) { map[e.id] = e; return; }
+      var ca = numOr(cur.answered != null ? cur.answered : cur.total);
+      var na = numOr(e.answered != null ? e.answered : e.total);
+      if (na > ca || (na === ca && cur.status === "interrupted" && e.status !== "interrupted")) map[e.id] = e;
+    });
+    Object.keys(map).forEach(function (k) { out.push(map[k]); });
+    out.sort(function (x, y) { return y.id - x.id; });
+    return out.slice(0, 50);
+  }
+  /*XFER_END*/
+
+  function buildExport() {
+    var qstats = load(K_QSTAT, {}), hist = load(K_HIST, []);
+    return { app: PREFIX, v: XFER_VERSION, at: Date.now(), counts: { hist: hist.length, q: Object.keys(qstats).length }, qstats: qstats, history: hist };
+  }
+
+  // 取り込み。貼り付けた文字でも、ファイルの中身でも、この関数に渡す。
+  function importText(text) {
+    var fail = function (msg) { return { ok: false, msg: msg }; };
+    if (!storageOK) return fail("このブラウザでは記録を保存できないため、取り込めません。");
+    var data;
+    try { data = JSON.parse(String(text || "").replace(/^﻿/, "").trim()); }
+    catch (e) { return fail("文字の形式が正しくありません。途中で切れていないか確認してください。切れる場合は、ファイルで保存・取り込みをお試しください。"); }
+    if (!data || typeof data !== "object") return fail("記録の形式が違います。");
+    if (data.app !== PREFIX) {
+      var other = typeof data.app === "string" && data.app.indexOf("Associate") >= 0 ? "Associate" : typeof data.app === "string" && data.app.indexOf("Developer") >= 0 ? "Developer" : null;
+      return fail(other ? "別の試験（" + other + "）の記録です。この画面には取り込めません。" : "記録の形式が違います。");
+    }
+    if (data.v !== XFER_VERSION || !data.qstats || typeof data.qstats !== "object" || !Array.isArray(data.history)) return fail("記録の形式が違います。");
+    var nq = Object.keys(data.qstats).length;
+    if (data.counts && (data.counts.q !== nq || data.counts.hist !== data.history.length)) {
+      return fail("記録が途中で切れている可能性があります（件数が合いません）。ファイルで保存・取り込みをお試しください。");
+    }
+    // 取り込む前に、今の記録を1世代だけ残す
+    save(K_BACKUP, { at: Date.now(), qstats: load(K_QSTAT, {}), history: load(K_HIST, []) });
+    var qs = mergeQStats(load(K_QSTAT, {}), data.qstats);
+    var hist = mergeHistory(load(K_HIST, []), data.history);
+    save(K_QSTAT, qs);
+    save(K_HIST, hist);
+    return { ok: true, msg: "取り込みました。履歴 " + hist.length + "件、問題 " + Object.keys(qs).length + "問の記録を、今の記録と合わせました。" };
+  }
+
+  function restoreBackup() {
+    var bk = load(K_BACKUP, null);
+    if (!bk || typeof bk !== "object") return { ok: false, msg: "戻せる記録がありません。" };
+    save(K_QSTAT, bk.qstats || {});
+    save(K_HIST, bk.history || []);
+    return { ok: true, msg: "取り込む前の記録に戻しました。" };
+  }
+
+  function downloadExport() {
+    var text = JSON.stringify(buildExport(), null, 2);
+    var d = new Date();
+    var pad = function (x) { return (x < 10 ? "0" : "") + x; };
+    var ymd = d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate());
+    var a = document.createElement("a");
+    var url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+    a.href = url;
+    a.download = "claude-quiz-" + examKey() + "-記録-" + ymd + ".json";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  }
+
+  var xferNotice = null;   // 直前の操作の結果（表示したら消す）
+  function copyExport(box, msg) {
+    var text = JSON.stringify(buildExport());
+    box.value = text;
+    box.style.display = "block";
+    var showFail = function () { box.select(); msg.textContent = "自動ではコピーできませんでした。下の文字を選んで、コピーしてください。"; };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { msg.textContent = "コピーしました。貼り付け先で「貼り付け」してください。"; }, showFail);
+      } else { showFail(); }
+    } catch (e) { showFail(); }
+  }
+
+  function doImport(text) {
+    xferNotice = importText(text);
+    go("xfer");
+  }
+
+  function viewXfer() {
+    var box = h("div");
+    var notice = xferNotice;
+    xferNotice = null;
+    if (notice) box.appendChild(h("div", { class: notice.ok ? "card" : "banner", text: notice.msg }));
+
+    box.appendChild(h("div", { class: "card" }, [
+      h("h2", { text: "この端末の記録を、別の端末に移す" }),
+      h("p", { class: "small", text: "記録は、このブラウザ（この端末）の中にだけあります。別の端末と合わせるには、次の手順で移します。" }),
+      h("ol", null, [
+        h("li", { text: "今の端末で「ファイルに保存」を押す。" }),
+        h("li", { text: "保存されたファイルを、別の端末へ送る（メールや、クラウドのフォルダなど）。" }),
+        h("li", { text: "別の端末で、この画面を開き「ファイルを選んで取り込む」で、そのファイルを選ぶ。" })
+      ]),
+      h("p", { class: "small", text: "取り込みは、今の記録と合わせる方式です。今の記録が消えることはありません。取り込む前の記録は、1回分だけ残ります。" })
+    ]));
+
+    var copyBox = h("textarea", { rows: "6", readonly: "readonly", style: "display:none;width:100%" });
+    var copyMsg = h("p", { class: "small" });
+    box.appendChild(h("div", { class: "card" }, [
+      h("h2", { text: "ファイルに保存する（おすすめ）" }),
+      h("p", { class: "small", text: "記録が多くても扱えます。" }),
+      h("div", { class: "row" }, [
+        h("button", { text: "ファイルに保存", onclick: downloadExport })
+      ]),
+      h("h2", { text: "文字でコピーする（予備）" }),
+      h("p", { class: "small", text: "ファイルを送れないときの予備です。文字数が多いと、貼り付け先で途中まで切れることがあります。" }),
+      h("div", { class: "row" }, [
+        h("button", { class: "ghost", text: "文字としてコピー", onclick: function () { copyExport(copyBox, copyMsg); } })
+      ]),
+      copyMsg,
+      copyBox
+    ]));
+
+    var pasteBox = h("textarea", { rows: "4", placeholder: "コピーした文字を、ここに貼り付け", style: "width:100%" });
+    var fileIn = h("input", { type: "file", accept: ".json,application/json", onchange: function () {
+      var f = fileIn.files && fileIn.files[0];
+      if (!f) return;
+      var fr = new FileReader();
+      fr.onload = function () { doImport(String(fr.result || "")); };
+      fr.onerror = function () { xferNotice = { ok: false, msg: "ファイルを読めませんでした。" }; go("xfer"); };
+      fr.readAsText(f, "utf-8");
+    } });
+    var importCard = h("div", { class: "card" }, [
+      h("h2", { text: "保存した記録を取り込む" }),
+      h("p", { class: "small", text: "別の端末で保存したファイルを、選んで取り込みます。" }),
+      fileIn,
+      h("h2", { text: "文字で取り込む（予備）" }),
+      pasteBox,
+      h("div", { class: "row" }, [
+        h("button", { text: "貼り付けた文字を取り込む", onclick: function () {
+          if (!pasteBox.value.trim()) { xferNotice = { ok: false, msg: "貼り付け欄が空です。" }; go("xfer"); return; }
+          doImport(pasteBox.value);
+        } })
+      ])
+    ]);
+    if (load(K_BACKUP, null)) {
+      importCard.appendChild(h("div", { class: "row" }, [
+        h("button", { class: "ghost", text: "取り込む前の記録に戻す", onclick: function () { xferNotice = restoreBackup(); go("xfer"); } })
+      ]));
+    }
+    box.appendChild(importCard);
+    return box;
+  }
+
   /* ---------- 画面の枠（タブ） ---------- */
   var TABS = [
     { id: "solve", label: "解く" },
     { id: "browse", label: "問題一覧（見るだけ）" },
     { id: "history", label: "履歴" },
-    { id: "stats", label: "問題別成績" }
+    { id: "stats", label: "問題別成績" },
+    { id: "xfer", label: "記録の共有" }
   ];
   function shell(active, content) {
     clear();
@@ -391,7 +589,7 @@
   }
   function go(t) {
     tab = t;
-    var c = t === "solve" ? viewSolve() : t === "browse" ? viewBrowse() : t === "history" ? viewHistory() : viewStats();
+    var c = t === "solve" ? viewSolve() : t === "browse" ? viewBrowse() : t === "history" ? viewHistory() : t === "xfer" ? viewXfer() : viewStats();
     shell(t, c);
   }
 
