@@ -1,0 +1,15 @@
+{
+  "title": "Claude Developer 練習問題",
+  "subtitle": "自作の練習問題です。公式の試験問題ではありません。解説は、公式の講座とドキュメントの要点にもとづいています。",
+  "storagePrefix": "claudeDeveloperQuiz",
+  "domains": [
+    { "name": "アプリケーションと統合", "weight": 33 },
+    { "name": "モデル選択と最適化", "weight": 17 },
+    { "name": "エージェントとワークフロー", "weight": 15 },
+    { "name": "プロンプトとコンテキスト", "weight": 11 },
+    { "name": "ツールとMCP", "weight": 11 },
+    { "name": "セキュリティと安全", "weight": 8 },
+    { "name": "Claude Code", "weight": 3 },
+    { "name": "評価・テスト・デバッグ", "weight": 3 }
+  ]
+}
