@@ -87,8 +87,8 @@
   .notice { background: var(--accent-weak); padding: 10px 14px; border-radius: 10px; margin-bottom: 12px; }
   .timeline { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   input[type=number] { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); width: 90px; }
-  /* タイマー（出題画面の上に貼りついて、スクロールしても見える） */
-  .timer { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 6px 0 8px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+  /* タイマー（画面と一緒にスクロールします。貼りつけはしません） */
+  .timer { background: var(--bg); padding: 6px 0 8px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
   .trow { display: grid; grid-template-columns: 7.5em 1fr 11em; gap: 10px; align-items: center; padding: 3px 8px; border-radius: 8px; border: 1px solid transparent; opacity: .55; }
   .trow.active { opacity: 1; border-color: var(--line); background: var(--card); }
   .trow.over { border-color: var(--ng); }
@@ -100,7 +100,32 @@
   .ttext { font-size: .82rem; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .ttext.over { color: var(--ng); font-weight: 700; }
   .tsub { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: .8rem; color: var(--muted); padding: 2px 8px 0; }
-  @media (max-width: 560px) { .trow { grid-template-columns: 5.5em 1fr; } .ttext { grid-column: 1 / -1; text-align: left; } }
+  /* スマホ: 1行にまとめる（いまの段階のゲージだけを、細く出す） */
+  @media (max-width: 560px) {
+    .timer { padding: 2px 0 4px; margin-bottom: 6px; }
+    .trow:not(.active) { display: none; }
+    .trow { grid-template-columns: 4.4em 1fr auto; gap: 6px; padding: 2px 4px; }
+    .tname { font-size: .75rem; }
+    .tgauge { height: 6px; }
+    .ttext { font-size: .75rem; grid-column: auto; text-align: right; }
+    .tsub { font-size: .72rem; padding: 0 4px; }
+    .tsub button { padding: 3px 8px; }
+  }
+  /* 回答ボタン（自信つき） */
+  .confrow { display: flex; gap: 8px; flex-wrap: wrap; width: 100%; }
+  .confrow button { flex: 1 1 0; min-width: 4.6em; padding: 12px 4px; }
+  .confrow .unk { flex: 0 0 auto; }
+  @media (max-width: 560px) { .confrow .unk { flex: 1 1 100%; } }
+  button.primary.big { width: 100%; padding: 14px 16px; font-size: 1.05rem; }
+  /* スライダー */
+  .slrow { margin: 14px 0; }
+  .slhead { display: flex; justify-content: space-between; gap: 8px; font-size: .9rem; font-weight: 700; }
+  .slhead .slv { color: var(--accent); text-align: right; }
+  .slrow input[type=range] { width: 100%; margin: 6px 0 0; }
+  .slends { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); }
+  /* AIに質問 */
+  .airow { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  details.more.card > summary { font-weight: 700; }
 </style>
 </head>
 <body>
@@ -196,9 +221,41 @@
       h("span", { class: "src", text: "出典（講座）: " + q.src })
     ]);
   }
+  // AIに質問: 質問文をコピーして、Claude を開く（開いた先の入力欄に事前入力されない場合は、貼り付けてください）
+  function copyText(text, msgEl, okMsg) {
+    var fail = function () { msgEl.textContent = "自動ではコピーできませんでした。"; };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { msgEl.textContent = okMsg; }, fail);
+      else fail();
+    } catch (e) { fail(); }
+  }
+  function buildAskText(q, sel, ok, unk) {
+    var name = function (id) { var o = optById(q, id); return o ? o.t : id; };
+    var lines = ["Claude の認定資格の練習問題で、わからない点があります。初心者にも分かるように、背景から丁寧に教えてください。", "", "【問題】" + q.q, "【選択肢】"];
+    q.options.forEach(function (o) { lines.push("・" + o.t); });
+    lines.push("【正解】" + q.answer.map(name).join(" ／ "));
+    lines.push("【私の回答】" + (unk ? "わからなかった" : sel.map(name).join(" ／ ") + (ok ? "（正解）" : "（不正解）")));
+    lines.push("", "知りたいこと: なぜその答えになるのか。ほかの選択肢はなぜ違うのか。実務ではどんな場面で使うのか。出てくる専門用語の意味。");
+    return lines.join("\n");
+  }
+  function aiBlock(q, sel, ok, unk) {
+    var full = buildAskText(q, sel, ok, unk);
+    var short = full.length > 700 ? full.slice(0, 700) + "…" : full;
+    var msg = h("span", { class: "small" });
+    return h("div", { class: "airow" }, [
+      h("button", { class: "ghost", text: "AIに質問する（Claudeを開く）", onclick: function () {
+        copyText(full, msg, "質問文をコピーしました。開いた画面の入力欄が空なら、貼り付けてください。");
+        window.open("https://claude.ai/new?q=" + encodeURIComponent(short), "_blank", "noopener");
+      } }),
+      h("button", { class: "ghost", text: "質問文だけコピー", onclick: function () { copyText(full, msg, "質問文をコピーしました。"); } }),
+      msg
+    ]);
+  }
   function statBadge(s) {
     if (!s) return h("span", { class: "badge", text: "未回答" });
-    return h("span", { class: "badge " + (s.last ? "ok" : "ng"), text: "前回 " + (s.last ? "○" : "×") + "　正解 " + s.c + "/" + s.n });
+    var lh = s.hist && s.hist.length ? s.hist[s.hist.length - 1] : null;
+    var ct = lh ? (lh.unk ? "　わからない" : lh.conf === 2 ? "　自信あり" : lh.conf === 1 ? "　いまひとつ" : lh.conf === 0 ? "　自信なし" : "") : "";
+    return h("span", { class: "badge " + (s.last ? "ok" : "ng"), text: "前回 " + (s.last ? "○" : "×") + ct + "　正解 " + s.c + "/" + s.n });
   }
 
   /* ---------- タイマー ----------
@@ -342,12 +399,15 @@
   }
 
   /* ---------- 記録（履歴・問題別成績） ---------- */
-  function recordAnswer(qid, ok) {
+  function recordAnswer(qid, ok, conf, unk) {
     var all = load(K_QSTAT, {});
     var s = all[qid] || { n: 0, c: 0, last: null, lastAt: null, hist: [] };
     s.n++; if (ok) s.c++;
     s.last = ok; s.lastAt = Date.now();
-    s.hist.push({ ts: s.lastAt, ok: ok });
+    var he = { ts: s.lastAt, ok: ok };
+    if (conf != null) he.conf = conf;   // 0=自信なし 1=いまひとつ 2=自信あり
+    if (unk) he.unk = true;             // わからない
+    s.hist.push(he);
     if (s.hist.length > 30) s.hist = s.hist.slice(-30);
     all[qid] = s;
     save(K_QSTAT, all);
@@ -358,7 +418,7 @@
       id: r.id, ts: r.id, at: fmt(r.id), status: status, mode: r.mode || "",
       total: r.order.length, answered: r.results.length,
       correct: r.results.filter(function (x) { return x.ok; }).length,
-      details: r.results.map(function (x) { return { q: x.qid, ok: x.ok, sel: x.sel, ta: x.ta != null ? Math.round(x.ta) : null, tr: x.tr != null ? Math.round(x.tr) : null }; }),
+      details: r.results.map(function (x) { return { q: x.qid, ok: x.ok, conf: x.conf, unk: x.unk, sel: x.sel, ta: x.ta != null ? Math.round(x.ta) : null, tr: x.tr != null ? Math.round(x.tr) : null }; }),
       time: timerOn(r) ? { a: Math.round(sumTimes(r).a), r: Math.round(sumTimes(r).r), ta: r.timer.ans, tr: r.timer.rev } : null
     };
     var found = -1;
@@ -395,7 +455,10 @@
         var key = x.ts + ":" + (x.ok ? "1" : "0");
         if (seen[key]) return;
         seen[key] = true;
-        uniq.push({ ts: x.ts, ok: !!x.ok });
+        var ent = { ts: x.ts, ok: !!x.ok };
+        if (typeof x.conf === "number") ent.conf = x.conf;
+        if (x.unk) ent.unk = true;
+        uniq.push(ent);
       });
       uniq.sort(function (p, q) { return p.ts - q.ts; });
       var olderN = Math.max(numOr(a && a.n) - ha.length, numOr(b && b.n) - hb.length, 0);
@@ -636,6 +699,25 @@
     { v: "wrong", t: "まちがえた問題を優先", d: "前回まちがえた問題、過去にまちがえた問題を、優先して選びます。" },
     { v: "blueprint", t: "本番の配点に合わせる", d: "公式の配点の割合に近くなるように、分野ごとの問題数を決めます（模擬試験の練習向け）。" }
   ];
+  // 復習の濃さ（スライダー）。新しい問題と、復習の問題の、どちらを多めに選ぶか
+  var RV = { nw: 4, rw: 1 };
+  var RV_TABLE = [{ nw: 7, rw: 0.4 }, { nw: 5.5, rw: 0.7 }, { nw: 4, rw: 1 }, { nw: 2.5, rw: 1.5 }, { nw: 1, rw: 2 }];
+  function setReview(lv) {
+    lv = parseInt(lv, 10);
+    var t = RV_TABLE[isNaN(lv) ? 2 : Math.max(0, Math.min(4, lv))];
+    RV.nw = t.nw; RV.rw = t.rw;
+  }
+  // 前回の「自信」と「わからない」から、復習の優先度を決める
+  function lastHist(s) { return s && s.hist && s.hist.length ? s.hist[s.hist.length - 1] : null; }
+  function riskInfo(s) {
+    var lh = lastHist(s);
+    if (!lh) return { add: 0, mult: 1, why: [] };
+    if (lh.unk) return { add: 5, mult: 1, why: ["前回はわからなかった"] };
+    if (lh.ok && lh.conf != null && lh.conf <= 1) return { add: lh.conf === 0 ? 5 : 3, mult: 1, why: ["まぐれ正解の疑い"] };
+    if (!lh.ok && lh.conf === 2) return { add: 7, mult: 1, why: ["自信ありで不正解（思い込みの疑い）"] };
+    if (lh.ok && lh.conf === 2) return { add: 0, mult: 0.6, why: [] };
+    return { add: 0, mult: 1, why: [] };
+  }
   function modeLabel(v) {
     for (var i = 0; i < MODES.length; i++) if (MODES[i].v === v) return MODES[i].t.replace(/（.*）/, "");
     return "";
@@ -668,10 +750,10 @@
     }
     // おすすめ（smart）
     var w = 1, why = [];
-    if (!s) { w += 4; why.push("未回答"); }
+    if (!s) { w += RV.nw; why.push("未回答"); }
     else {
-      if (s.last === false) { w += 5; why.push("前回まちがえた"); }
-      else if (s.n > s.c) { w += 2; why.push("過去にまちがえた"); }
+      if (s.last === false) { w += 5 * RV.rw; why.push("前回まちがえた"); }
+      else if (s.n > s.c) { w += 2 * RV.rw; why.push("過去にまちがえた"); }
       var acc = s.c / s.n;
       if (acc < 0.6) { w += (1 - acc) * 3; if (why.indexOf("前回まちがえた") < 0) why.push("正答率が低い"); }
       var days = (Date.now() - s.lastAt) / DAY;
@@ -679,6 +761,9 @@
         if (days < 1) w *= 0.3;                       // さっき正解した問題は、少し後回し
         else if (days >= 3) { w += 1; why.push("しばらく解いていない"); }
       }
+      var ri = riskInfo(s);
+      if (ri.add) { w += ri.add * RV.rw; ri.why.forEach(function (x) { why.push(x); }); }
+      else if (ri.mult !== 1) w *= ri.mult;
     }
     if (WEIGHTS[q.domain] != null && wmax) {
       w *= 0.7 + 0.6 * WEIGHTS[q.domain] / wmax;       // 配点の大きい分野を、やや多めに
@@ -738,14 +823,16 @@
     if (o.dom) pool = pool.filter(function (q) { return q.domain === o.dom; });
     if (o.scope === "retry") pool = pool.filter(function (q) { var s = stats[q.id]; return !s || s.last === false; });
     if (o.scope === "ever") pool = pool.filter(function (q) { var s = stats[q.id]; return s && s.n > s.c; });
+    if (o.scope === "review") pool = pool.filter(function (q) { var s = stats[q.id]; return s && (s.last === false || riskInfo(s).add > 0); });
     return pool;
   }
   function launch(o) {
     var pool = poolFor(o);
     if (!pool.length) { alert("該当する問題がありません。条件を変えてください。"); return; }
     var n = !o.n ? pool.length : Math.min(o.n, pool.length);
+    setReview(o.rv);
     var pick = chooseQuestions(pool, n, o.mode);
-    beginRun(pick.qs, o.sq, o.so, pick.reasons, modeLabel(o.mode));
+    beginRun(pick.qs, o.sq, o.so, pick.reasons, modeLabel(o.mode), o.timer);
   }
   // 記録を見て、次の1回を提案する（ルールによる計算。AIが文章を作っているわけではない）
   function buildRecommendation(stats) {
@@ -759,6 +846,8 @@
     } else {
       if (unseen) bullets.push("まだ解いていない問題が " + unseen + " 問（全 " + total + " 問中）あります。");
       if (lastWrong) bullets.push("前回まちがえた問題が " + lastWrong + " 問あります。早めに復習すると、定着しやすくなります。");
+      var shaky = ALLQ.filter(function (q) { var s = stats[q.id]; return s && s.last !== false && riskInfo(s).add > 0; }).length;
+      if (shaky) bullets.push("まぐれ正解の疑い・わからなかった問題が " + shaky + " 問あります（自信が低かった、または「わからない」を選んだ問題です）。");
       var dacc = domainAccuracy(stats), wmax = maxWeight(), weak = null, wp = 0;
       Object.keys(dacc).forEach(function (d) {
         if (dacc[d] == null) return;
@@ -769,6 +858,28 @@
       if (!unseen && !lastWrong) bullets.push("全問を解き終え、直近の結果もすべて正解です。しばらく解いていない問題を中心に、確認しましょう。");
     }
     return { n: n, bullets: bullets };
+  }
+
+  /* ---------- スライダー（数段階から選ぶ） ---------- */
+  function slider(title, labels, value) {
+    var cur = h("span", { class: "slv" });
+    var input = h("input", { type: "range", min: "0", max: String(labels.length - 1), step: "1" });
+    input.value = String(value);
+    var cbs = [];
+    function show() { cur.textContent = labels[parseInt(input.value, 10)]; }
+    input.addEventListener("input", function () { show(); cbs.forEach(function (f) { f(); }); });
+    show();
+    var el = h("div", { class: "slrow" }, [
+      h("div", { class: "slhead" }, [h("span", { text: title }), cur]),
+      input,
+      h("div", { class: "slends" }, [h("span", { text: labels[0] }), h("span", { text: labels[labels.length - 1] })])
+    ]);
+    return { el: el, get: function () { return parseInt(input.value, 10); }, onChange: function (f) { cbs.push(f); } };
+  }
+  function mergePrefs(patch) {
+    var p = load(K_PREFS, {});
+    Object.keys(patch).forEach(function (k) { p[k] = patch[k]; });
+    save(K_PREFS, p);
   }
 
   /* ---------- 「解く」タブ ---------- */
@@ -789,25 +900,54 @@
       ]));
     }
 
-    // 今日のおすすめ
+    // 今日のおすすめ（上: ふだんは、ここだけ使います）
     var rec = buildRecommendation(stats);
     var rc = h("div", { class: "card" });
     rc.appendChild(h("h2", { text: "今日のおすすめ" }));
     rec.bullets.forEach(function (b) { rc.appendChild(h("div", { text: "・" + b })); });
-    rc.appendChild(h("p", { class: "small", style: "margin:10px 0 0", text: "提案: 「おすすめ」の傾向で " + rec.n + " 問（目安: 約 " + Math.round(rec.n * 1.5) + " 分。1問1.5分で計算）。※ 記録をもとにした自動の提案です（ルールによる計算で、AIが文章を作っているわけではありません）。" }));
-    rc.appendChild(h("div", { class: "row" }, [h("button", { text: "このおすすめで始める", onclick: function () {
-      launch({ sets: null, dom: "", scope: "all", n: rec.n, mode: "smart", sq: true, so: true });
-    } })]));
+    var N_STEPS = [5, 10, 15, 20, 30];
+    var PACE_STEPS = [
+      { t: "タイマーなし", f: function () { return { on: false }; } },
+      { t: "ゆったり", f: function () { return { on: true, ans: 120, rev: 150 }; } },
+      { t: "標準", f: function () { return loadTimer(); } },
+      { t: "本番ペース", f: function () { return { on: true, ans: 120, rev: 60 }; } },
+      { t: "きびしめ", f: function () { return { on: true, ans: 60, rev: 90 }; } }
+    ];
+    var REVIEW_STEPS = ["新しい問題を中心に", "新しい問題を多めに", "ちょうどよく（おすすめ）", "復習を多めに", "復習を中心に"];
+    function stepVal(v, def, max) { v = parseInt(v, 10); return isNaN(v) ? def : Math.max(0, Math.min(max, v)); }
+    var slN = slider("問題数", N_STEPS.map(function (v) { return v + "問"; }), stepVal(prefs.qn, 1, 4));
+    var slRv = slider("出題の傾向", REVIEW_STEPS, stepVal(prefs.rv, 2, 4));
+    var slPace = slider("タイマー", PACE_STEPS.map(function (p) { return p.t; }), stepVal(prefs.pace, 2, 4));
+    rc.appendChild(slN.el); rc.appendChild(slRv.el); rc.appendChild(slPace.el);
+    var quickNote = h("p", { class: "small" });
+    rc.appendChild(quickNote);
+    function quickOpts() {
+      var p = load(K_PREFS, {});   // 下の「詳細設定」で決めた内容も使います
+      return {
+        sets: p.setsSel && p.setsSel.length ? p.setsSel : null,
+        dom: p.dom || "", scope: p.scope || "all", mode: p.mode || "smart",
+        sq: p.sq !== false, so: p.so !== false,
+        n: N_STEPS[slN.get()], rv: slRv.get(), timer: PACE_STEPS[slPace.get()].f()
+      };
+    }
+    function quickUpdate() {
+      var o = quickOpts(), pool = poolFor(o), n = Math.min(o.n, pool.length);
+      quickNote.textContent = "対象 " + pool.length + " 問から " + n + " 問を選びます（目安 約 " + Math.round(n * 1.5) + " 分）。";
+      mergePrefs({ qn: slN.get(), rv: slRv.get(), pace: slPace.get() });
+    }
+    [slN, slRv, slPace].forEach(function (sl) { sl.onChange(quickUpdate); });
+    quickUpdate();
+    rc.appendChild(h("div", { class: "row" }, [h("button", { class: "primary big", text: "おすすめで始める", onclick: function () { launch(quickOpts()); } })]));
     box.appendChild(rc);
 
     // 条件を選んで解く
-    var card = h("div", { class: "card" });
-    card.appendChild(h("h2", { text: "条件を選んで解く" }));
+    var card = h("details", { class: "more card" });   // 下: 詳細設定（一度決めたら、ふだんは触りません）
+    card.appendChild(h("summary", { text: "詳細設定（一度決めたら、ふだんは触りません）" }));
     var checks = [];
     card.appendChild(h("h2", { style: "font-size:.95rem", text: "問題セット" }));
     SETS.forEach(function (set) {
       var cb = h("input", { type: "checkbox" });
-      cb.checked = !prefs.sets || prefs.sets.indexOf(set.id) >= 0;
+      cb.checked = !prefs.setsSel || prefs.setsSel.indexOf(set.id) >= 0;
       cb.addEventListener("change", update);
       checks.push({ cb: cb, set: set });
       card.appendChild(h("label", { class: "check" }, [cb, h("span", { text: set.title + "（" + set.questions.length + "問）" })]));
@@ -822,7 +962,8 @@
     var scopes = [
       { v: "all", t: "すべて" },
       { v: "retry", t: "未回答、または前回まちがえた問題だけ" },
-      { v: "ever", t: "過去に1度でもまちがえた問題だけ" }
+      { v: "ever", t: "過去に1度でもまちがえた問題だけ" },
+      { v: "review", t: "復習候補だけ（まぐれ正解の疑い・わからなかった・まちがえた問題）" }
     ];
     var scopeRadios = scopes.map(function (sc) {
       var r = h("input", { type: "radio", name: "scope", value: sc.v });
@@ -832,11 +973,8 @@
       return r;
     });
 
-    card.appendChild(h("h2", { style: "font-size:.95rem", text: "問題数" }));
-    var nSel = h("select", { onchange: update }, [5, 10, 15, 20, 30, 0].map(function (v) { return h("option", { value: String(v), text: v ? v + "問" : "すべて" }); }));
-    nSel.value = String(prefs.n != null ? prefs.n : 10);
-    card.appendChild(nSel);
-    var timeNote = h("span", { class: "small", style: "margin-left:10px" });
+    card.appendChild(h("p", { class: "small", text: "問題数・出題の傾向・タイマーのきびしさは、上のスライダーで決めます。" }));
+    var timeNote = h("span", { class: "small" });
     card.appendChild(timeNote);
 
     card.appendChild(h("h2", { style: "font-size:.95rem", text: "出題の傾向" }));
@@ -901,13 +1039,15 @@
         sets: checks.filter(function (x) { return x.cb.checked; }).map(function (x) { return x.set.id; }),
         dom: domSel.value,
         scope: scopeRadios.filter(function (r) { return r.checked; })[0].value,
-        n: parseInt(nSel.value, 10),
+        n: N_STEPS[slN.get()], rv: slRv.get(),
         mode: modeRadios.filter(function (r) { return r.checked; })[0].value,
         sq: shQ.checked, so: shO.checked
       };
     }
     function update() {
       var o = collect();
+      mergePrefs({ setsSel: o.sets, dom: o.dom, scope: o.scope, mode: o.mode, sq: o.sq, so: o.so });
+      quickUpdate();
       var pool = poolFor(o);
       var n = !o.n ? pool.length : Math.min(o.n, pool.length);
       summary.textContent = "対象 " + pool.length + " 問から " + n + " 問を選びます（傾向: " + modeLabel(o.mode) + "）。";
@@ -920,9 +1060,8 @@
     shQ.addEventListener("change", update); shO.addEventListener("change", update);
     update();
 
-    card.appendChild(h("div", { class: "row" }, [h("button", { text: "はじめる", onclick: function () {
+    card.appendChild(h("div", { class: "row" }, [h("button", { class: "ghost", text: "この条件ではじめる", onclick: function () {
       var o = collect();
-      save(K_PREFS, o);
       save(K_TIMER, readTimer());
       launch(o);
     } })]));
@@ -931,11 +1070,11 @@
     return box;
   }
 
-  function beginRun(qs, shuffleQ, shuffleO, reasons, label) {
+  function beginRun(qs, shuffleQ, shuffleO, reasons, label, timerOv) {
     var list = shuffleQ ? shuffle(qs) : qs.slice().sort(function (a, b) { return ALLQ.indexOf(a) - ALLQ.indexOf(b); });
     var optOrder = {};
     list.forEach(function (q) { optOrder[q.id] = (shuffleO ? shuffle(q.options) : q.options).map(function (o) { return o.id; }); });
-    var tm = loadTimer();   // この回のタイマー設定は、開始時の値で固定します（途中で再開しても同じ）
+    var tm = timerOv || loadTimer();   // この回のタイマー設定は、開始時の値で固定します（途中で再開しても同じ）
     run = { id: Date.now(), order: list.map(function (q) { return q.id; }), optOrder: optOrder, results: [], reasons: reasons || {}, mode: label || "",
       timer: tm.on ? { on: true, ans: tm.ans, rev: tm.rev } : { on: false }, t: { a: 0, r: 0 }, cur: null };
     save(K_RUN, run);
@@ -988,26 +1127,37 @@
       inputs.push({ input: input, label: label, o: o });
       card.appendChild(label);
     });
-    var submit = h("button", { class: "primary", text: "回答する", disabled: "disabled" });
+    // 回答ボタン: 回答と、自信（自信あり／いまひとつ／自信なし）を、同時に記録します。「わからない」はいつでも押せます。
+    var confBtns = [];
+    var submit = h("div", { class: "confrow" });
+    [[2, "自信あり", "primary"], [1, "いまひとつ", "ghost"], [0, "自信なし", "ghost"]].forEach(function (d) {
+      var b = h("button", { class: d[2], text: d[1], disabled: "disabled", onclick: function () { doSubmit(d[0], false); } });
+      confBtns.push(b); submit.appendChild(b);
+    });
+    submit.appendChild(h("button", { class: "ghost unk", text: "わからない", onclick: function () { doSubmit(null, true); } }));
     var isLast = idx + 1 >= run.order.length;
     var next = h("button", { class: "primary", text: (isLast ? "結果を見る" : "次の問題へ") + " ▶", style: "display:none" });
-    card.appendChild(h("div", { class: "row" }, [submit, next]));
+    card.appendChild(h("p", { class: "hint", style: "margin-top:12px", text: "答えを選んだら、いまの自信のボタンで回答します。見当がつかないときは「わからない」を押してください。" }));
+    card.appendChild(h("div", { class: "row", style: "margin-top:4px" }, [submit, next]));
     var feedback = h("div");
     card.appendChild(feedback);
     app.appendChild(card);
 
     function selected() { return inputs.filter(function (x) { return x.input.checked; }).map(function (x) { return x.o.id; }); }
-    function update() { if (!answered) submit.disabled = selected().length !== need; }
+    function update() { if (!answered) confBtns.forEach(function (b) { b.disabled = selected().length !== need; }); }
 
-    submit.addEventListener("click", function () {
+    function doSubmit(conf, unk) {
       if (answered) return;
       answered = true;
       if (ui) ui.resume();
-      var sel = selected(), ans = q.answer;
-      var ok = sel.length === ans.length && sel.every(function (s) { return ans.indexOf(s) >= 0; });
+      var sel = unk ? [] : selected(), ans = q.answer;
+      var ok = !unk && sel.length === ans.length && sel.every(function (s) { return ans.indexOf(s) >= 0; });
       if (ui) { flushTick(); phase = "rev"; }   // ここまでが「回答の時間」。以降は「解説を読む時間」
-      run.results.push({ qid: q.id, ok: ok, sel: sel, ta: run.cur ? run.cur.a : null, tr: 0 });
-      recordAnswer(q.id, ok);
+      var rec1 = { qid: q.id, ok: ok, sel: sel, ta: run.cur ? run.cur.a : null, tr: 0 };
+      if (conf != null) rec1.conf = conf;
+      if (unk) rec1.unk = true;
+      run.results.push(rec1);
+      recordAnswer(q.id, ok, conf, unk);
       save(K_RUN, run);
       upsertHistory(run, run.results.length >= run.order.length ? "complete" : "interrupted");
       inputs.forEach(function (x) {
@@ -1016,13 +1166,16 @@
         if (isAns) { x.label.classList.add("correct"); x.label.appendChild(h("span", { class: "mark ok", text: "正解" })); }
         else if (isSel) { x.label.classList.add("wrong"); x.label.appendChild(h("span", { class: "mark ng", text: "不正解" })); }
       });
-      feedback.appendChild(h("p", { class: "verdict " + (ok ? "ok" : "ng"), text: ok ? "正解です" : "不正解です" }));
+      feedback.appendChild(h("p", { class: "verdict " + (ok ? "ok" : "ng"), text: unk ? "わからない（不正解として記録します）" : ok ? "正解です" : "不正解です" }));
+      if (ok && conf != null && conf <= 1) feedback.appendChild(h("p", { class: "hint", text: "正解ですが、自信が低かったので、まぐれの可能性があります。復習の候補に入れておきます。" }));
+      if (!ok && !unk && conf === 2) feedback.appendChild(h("p", { class: "hint", text: "自信ありで不正解でした。思い込みの可能性があるので、解説をよく読んで、優先して復習します。" }));
       feedback.appendChild(explainBlock(q));
       if (q.basics) feedback.appendChild(basicsBlock(q));
+      feedback.appendChild(aiBlock(q, sel, ok, unk));
       submit.style.display = "none";
       next.style.display = "";
       if (ui) ui.update();
-    });
+    }
     next.addEventListener("click", function () { renderQuestion(); });
     if (ui) startTick(ui);
   }
