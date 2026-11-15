@@ -69,7 +69,28 @@
   .basics { margin-top: 12px; padding: 14px 16px; border-radius: 10px; border: 1px solid var(--line);
     border-left: 4px solid var(--accent); background: var(--card); white-space: pre-wrap; }
   .basics .bt { display: block; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+  .explain .bt { display: block; font-weight: 700; color: var(--accent); margin-bottom: 6px; }
+  /* 基礎からの解説（長文・節つき） */
+  .basics.deep { white-space: normal; }
+  .deep .dsec { margin: 18px 0 6px; font-size: .95rem; color: var(--accent); border-bottom: 1px dashed var(--line); padding-bottom: 3px; }
+  .deep .dp { margin: 6px 0; line-height: 1.85; }
+  .deep .dul { margin: 6px 0; padding-left: 1.3em; line-height: 1.8; }
+  .deep .dul li { margin: 6px 0; }
+  /* 用語の注釈 */
+  .term { border-bottom: 1.5px dotted var(--accent); cursor: help; }
+  .sheet-bg { position: fixed; inset: 0; background: rgba(0, 0, 0, .45); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+  .sheet { background: var(--card); color: var(--text); width: 100%; max-width: 720px; max-height: 78vh; overflow: auto; padding: 16px 18px 24px; border-radius: 16px 16px 0 0; box-shadow: 0 -4px 20px rgba(0, 0, 0, .25); }
+  .sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 1.05rem; margin-bottom: 4px; }
+  .sheet-k { margin-top: 12px; font-size: .8rem; font-weight: 700; color: var(--accent); }
+  .sheet-p { margin: 4px 0 0; line-height: 1.8; white-space: pre-wrap; }
+  .sheet-rel { margin-top: 12px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: .85rem; color: var(--muted); }
   .verdict { font-weight: 700; margin: 12px 0 0; }
+  /* 回答ボタンのグラデーション（濃い → 薄い）。「わからない」は白 */
+  button.conf { font-weight: 700; border: 1px solid transparent; box-shadow: none; }
+  button.conf2 { background: var(--accent); color: #fff; box-shadow: 0 2px 6px rgba(196, 98, 63, .35); }
+  button.conf1 { background: color-mix(in srgb, var(--accent) 55%, var(--card)); color: var(--text); }
+  button.conf0 { background: color-mix(in srgb, var(--accent) 25%, var(--card)); color: var(--text); }
+  .confrow button:disabled { opacity: .6; }
   .verdict.ok { color: var(--ok); } .verdict.ng { color: var(--ng); }
   table { width: 100%; border-collapse: collapse; font-size: .92rem; }
   th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -215,11 +236,135 @@
       document.createTextNode(q.basics || "")
     ]);
   }
+
+  /* ---------- 用語集と、用語の注釈 ---------- */
+  var GLOSS = window.GLOSSARY || [];
+  var gIndex = null, annCtx = {};
+  function resetAnn() { annCtx = {}; }
+  function glossIndex() {
+    if (gIndex) return gIndex;
+    var arr = [];
+    GLOSS.forEach(function (g, gi) {
+      [g.term].concat(g.aliases || []).forEach(function (w) { if (w) arr.push({ w: w, lw: w.toLowerCase(), gi: gi }); });
+    });
+    arr.sort(function (a, b) { return b.w.length - a.w.length; });
+    gIndex = arr;
+    return arr;
+  }
+  function isWordCh(c) { return !!c && /[A-Za-z0-9_]/.test(c); }
+  // 文章の中の用語に、点線の印をつける（同じ用語は、問題ごとに最初の1回だけ）。ノードの配列を返す
+  function annotate(text) {
+    text = String(text == null ? "" : text);
+    if (!GLOSS.length || load(K_PREFS, {}).gloss === false) return [text];
+    var low = text.toLowerCase(), hits = [];
+    glossIndex().forEach(function (it) {
+      if (annCtx[it.gi]) return;
+      var from = 0;
+      while (true) {
+        var p = low.indexOf(it.lw, from);
+        if (p < 0) return;
+        var e = p + it.lw.length;
+        var asciiStart = /[A-Za-z0-9_]/.test(it.lw.charAt(0)), asciiEnd = /[A-Za-z0-9_]/.test(it.lw.charAt(it.lw.length - 1));
+        var okB = !(asciiStart && isWordCh(text.charAt(p - 1))) && !(asciiEnd && isWordCh(text.charAt(e)));
+        var overlap = hits.some(function (h2) { return p < h2.e && e > h2.p; });
+        if (okB && !overlap) { hits.push({ p: p, e: e, gi: it.gi }); annCtx[it.gi] = true; return; }
+        from = p + 1;
+      }
+    });
+    hits.sort(function (a, b) { return a.p - b.p; });
+    var out = [], pos = 0;
+    hits.forEach(function (ht) {
+      if (ht.p > pos) out.push(text.slice(pos, ht.p));
+      out.push(h("span", { class: "term", tabindex: "0", role: "button", onclick: function (ev) { ev.stopPropagation(); showTerm(ht.gi); } }, [text.slice(ht.p, ht.e)]));
+      pos = ht.e;
+    });
+    if (pos < text.length) out.push(text.slice(pos));
+    return out;
+  }
+  function termBody(g) {
+    var nodes = [];
+    [["意味", g.meaning], ["ニュアンス・よくある勘違い", g.nuance], ["使われ方", g.usage], ["実務の場面", g.case]].forEach(function (r) {
+      if (!r[1]) return;
+      nodes.push(h("div", { class: "sheet-k", text: r[0] }));
+      nodes.push(h("p", { class: "sheet-p", text: r[1] }));
+    });
+    return nodes;
+  }
+  function glossIdx(term) { for (var i = 0; i < GLOSS.length; i++) if (GLOSS[i].term === term) return i; return -1; }
+  function showTerm(gi) {
+    var g = GLOSS[gi];
+    if (!g) return;
+    var bg = null;
+    var close = function () { if (bg && bg.parentNode) bg.parentNode.removeChild(bg); };
+    var box = h("div", { class: "sheet" }, [
+      h("div", { class: "sheet-head" }, [h("strong", { text: g.term + (g.reading ? "（" + g.reading + "）" : "") }), h("button", { class: "ghost small", text: "閉じる", onclick: close })])
+    ]);
+    termBody(g).forEach(function (n) { box.appendChild(n); });
+    var rel = (g.related || []).map(function (t) { return { t: t, i: glossIdx(t) }; }).filter(function (r) { return r.i >= 0; });
+    if (rel.length) {
+      var rr = h("div", { class: "sheet-rel" }, [h("span", { text: "関連:" })]);
+      rel.forEach(function (r) { rr.appendChild(h("button", { class: "ghost small", text: r.t, onclick: function () { close(); showTerm(r.i); } })); });
+      box.appendChild(rr);
+    }
+    bg = h("div", { class: "sheet-bg", onclick: function (e) { if (e.target === bg) close(); } }, [box]);
+    document.body.appendChild(bg);
+  }
+  function viewGloss() {
+    var box = h("div"), card = h("div", { class: "card" });
+    card.appendChild(h("h2", { text: "用語集" }));
+    card.appendChild(h("p", { class: "small", text: "AIやClaudeの開発で、よく出てくる言葉の意味・ニュアンス・使われ方・実務の場面です（自作。公式の定義ではありません）。解説の中の点線の言葉は、タップするとここと同じ説明が出ます。" }));
+    var search = h("input", { type: "search", placeholder: "用語を検索（例: キャッシュ）", style: "width:100%;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)" });
+    var count = h("p", { class: "small" }), list = h("div");
+    card.appendChild(search); card.appendChild(count);
+    function refresh() {
+      var kw = search.value.trim().toLowerCase();
+      while (list.firstChild) list.removeChild(list.firstChild);
+      var shown = GLOSS.filter(function (g) {
+        if (!kw) return true;
+        return ([g.term, g.reading || "", g.meaning || "", g.nuance || "", g.usage || "", g.case || ""].concat(g.aliases || [])).join(" ").toLowerCase().indexOf(kw) >= 0;
+      });
+      count.textContent = shown.length + " / " + GLOSS.length + " 語";
+      shown.forEach(function (g) {
+        var d = h("details", { class: "more" }, [h("summary", { text: g.term + (g.reading ? "（" + g.reading + "）" : "") + "　" + (g.meaning || "").slice(0, 40) + ((g.meaning || "").length > 40 ? "…" : "") })]);
+        termBody(g).forEach(function (n) { d.appendChild(n); });
+        list.appendChild(d);
+      });
+    }
+    search.addEventListener("input", refresh);
+    refresh();
+    card.appendChild(list);
+    box.appendChild(card);
+    return box;
+  }
+  // 長文の解説（背景 → 問題の意味 → 正解の意味 → ほかの選択肢 → たとえ → 実務 → 覚えること）。無い問題は、短い解説を出す
+  function deepText(q) {
+    var d = q.deep;
+    if (!d) return q.basics || "";
+    return [d.meaning, d.answer, d.analogy].concat((d.bg || []).map(function (x) { return x.t + " " + x.d; }), (d.others || []).map(function (x) { return x.t + " " + x.d; }), d.use || [], d.memo || []).join(" ");
+  }
+  function deepBlock(q) {
+    var d = q.deep;
+    if (!d) return basicsBlock(q);
+    var box = h("div", { class: "basics deep" }, [h("span", { class: "bt", text: "基礎からの解説（初心者向け）" })]);
+    var sec = function (title, node) { box.appendChild(h("h4", { class: "dsec", text: title })); box.appendChild(node); };
+    var para = function (t) { return h("p", { class: "dp" }, annotate(t)); };
+    var bullets = function (arr) { return h("ul", { class: "dul" }, arr.map(function (t) { return h("li", null, annotate(t)); })); };
+    if (d.bg && d.bg.length) sec("背景（用語と前提）", h("div", null, d.bg.map(function (x) { return h("p", { class: "dp" }, [h("strong", { text: x.t + "：" })].concat(annotate(x.d))); })));
+    if (d.meaning) sec("問題の意味", para(d.meaning));
+    if (d.answer) sec("正解の意味", para(d.answer));
+    if (d.others && d.others.length) sec("ほかの選択肢が違う理由", h("ul", { class: "dul" }, d.others.map(function (x) { return h("li", null, [h("strong", { text: x.t }), "　→　"].concat(annotate(x.d))); })));
+    if (d.analogy) sec("たとえるなら", para(d.analogy));
+    if (d.use && d.use.length) sec("実務での使いどころ", bullets(d.use));
+    if (d.memo && d.memo.length) sec("覚えておくこと", bullets(d.memo));
+    box.appendChild(h("p", { class: "small", style: "margin-top:14px", text: "※ 公式の講座とドキュメントをもとに作った、自作の解説です。公式の見解ではありません。" }));
+    return box;
+  }
   function explainBlock(q) {
     return h("div", { class: "explain" }, [
-      document.createTextNode(q.explain),
+      h("span", { class: "bt", text: "簡潔な解説（要点）" })
+    ].concat(annotate(q.explain), [
       h("span", { class: "src", text: "出典（講座）: " + q.src })
-    ]);
+    ]));
   }
   // AIに質問: 質問文をコピーして、Claude を開く（開いた先の入力欄に事前入力されない場合は、貼り付けてください）
   function copyText(text, msgEl, okMsg) {
@@ -638,6 +783,7 @@
     { id: "stats", label: "問題別成績" },
     { id: "xfer", label: "記録の共有" }
   ];
+  if (GLOSS.length) TABS.splice(4, 0, { id: "gloss", label: "用語集" });
   function shell(active, content) {
     clear();
     app.appendChild(h("h1", { text: CFG.title || "練習問題" }));
@@ -652,7 +798,7 @@
   }
   function go(t) {
     tab = t;
-    var c = t === "solve" ? viewSolve() : t === "browse" ? viewBrowse() : t === "history" ? viewHistory() : t === "xfer" ? viewXfer() : viewStats();
+    var c = t === "solve" ? viewSolve() : t === "browse" ? viewBrowse() : t === "history" ? viewHistory() : t === "xfer" ? viewXfer() : t === "gloss" ? viewGloss() : viewStats();
     shell(t, c);
   }
 
@@ -660,6 +806,7 @@
   // o: { sel: 選んだ選択肢のid配列, open: 解説を最初から開く, stat: 成績 }
   function questionBlock(q, o) {
     o = o || {};
+    resetAnn();
     var card = h("div", { class: "card" });
     var tags = h("div", { class: "tags" }, [
       h("span", { class: "tag", text: q.domain }),
@@ -668,7 +815,7 @@
     if (o.stat !== undefined) tags.appendChild(statBadge(o.stat));
     if (o.sel) tags.appendChild(h("span", { class: "badge " + (o.ok ? "ok" : "ng"), text: o.ok ? "この回: 正解" : "この回: 不正解" }));
     card.appendChild(tags);
-    card.appendChild(h("p", { class: "qtext", text: q.q }));
+    card.appendChild(h("p", { class: "qtext" }, annotate(q.q)));
     if (q.type === "multi") card.appendChild(h("p", { class: "hint", text: "※ " + q.pick + "つ選ぶ問題" }));
     q.options.forEach(function (op) {
       var cls = "optrow";
@@ -683,7 +830,7 @@
     var body = h("div", null, [
       h("p", { class: "small", style: "white-space:pre-wrap;margin:8px 0 0", text: "正解:\n" + optLines(q, q.answer) }),
       explainBlock(q),
-      q.basics ? basicsBlock(q) : null
+      (q.deep || q.basics) ? deepBlock(q) : null
     ]);
     var det = h("details", { class: "more" }, [h("summary", { text: "答えと解説を見る" }), body]);
     if (o.open) det.open = true;
@@ -1029,6 +1176,11 @@
     var shO = h("input", { type: "checkbox" }); shO.checked = prefs.so !== false;
     card.appendChild(h("label", { class: "check" }, [shQ, h("span", { text: "問題の順番をシャッフルする" })]));
     card.appendChild(h("label", { class: "check" }, [shO, h("span", { text: "選択肢の順番をシャッフルする" })]));
+    if (GLOSS.length) {
+      var glCb = h("input", { type: "checkbox" }); glCb.checked = prefs.gloss !== false;
+      glCb.addEventListener("change", function () { mergePrefs({ gloss: glCb.checked }); });
+      card.appendChild(h("label", { class: "check" }, [glCb, h("span", { text: "用語に点線をつけて、タップで説明を出す" })]));
+    }
     card.appendChild(h("p", { class: "small", text: "途中でしんどくなったら、問題画面の「中断して保存」を押せます。そこまでの結果は記録され、あとで続きから再開できます。" }));
 
     var summary = h("p", { class: "small", style: "font-weight:700" });
@@ -1086,6 +1238,7 @@
   /* ---------- 出題画面 ---------- */
   function renderQuestion() {
     clear();
+    resetAnn();
     var idx = run.results.length;
     if (idx >= run.order.length) { finishRun(); return; }
     var q = QMAP[run.order[idx]];
@@ -1115,7 +1268,7 @@
     ]);
     ((run.reasons && run.reasons[q.id]) || []).forEach(function (w) { tg.appendChild(h("span", { class: "badge warn", text: "選ばれた理由: " + w })); });
     card.appendChild(tg);
-    card.appendChild(h("p", { class: "qtext", text: q.q }));
+    card.appendChild(h("p", { class: "qtext" }, annotate(q.q)));
     if (isMulti) card.appendChild(h("p", { class: "hint", text: "※ " + need + "つ選んでください。" }));
 
     var inputs = [];
@@ -1130,7 +1283,7 @@
     // 回答ボタン: 回答と、自信（自信あり／いまひとつ／自信なし）を、同時に記録します。「わからない」はいつでも押せます。
     var confBtns = [];
     var submit = h("div", { class: "confrow" });
-    [[2, "自信あり", "primary"], [1, "いまひとつ", "ghost"], [0, "自信なし", "ghost"]].forEach(function (d) {
+    [[2, "自信あり", "conf conf2"], [1, "いまひとつ", "conf conf1"], [0, "自信なし", "conf conf0"]].forEach(function (d) {
       var b = h("button", { class: d[2], text: d[1], disabled: "disabled", onclick: function () { doSubmit(d[0], false); } });
       confBtns.push(b); submit.appendChild(b);
     });
@@ -1170,7 +1323,7 @@
       if (ok && conf != null && conf <= 1) feedback.appendChild(h("p", { class: "hint", text: "正解ですが、自信が低かったので、まぐれの可能性があります。復習の候補に入れておきます。" }));
       if (!ok && !unk && conf === 2) feedback.appendChild(h("p", { class: "hint", text: "自信ありで不正解でした。思い込みの可能性があるので、解説をよく読んで、優先して復習します。" }));
       feedback.appendChild(explainBlock(q));
-      if (q.basics) feedback.appendChild(basicsBlock(q));
+      if (q.deep || q.basics) feedback.appendChild(deepBlock(q));
       feedback.appendChild(aiBlock(q, sel, ok, unk));
       submit.style.display = "none";
       next.style.display = "";
@@ -1290,7 +1443,7 @@
         if (bf.status === "ng" && !(s && s.last === false)) return false;
         if (bf.status === "ever" && !(s && s.n > s.c)) return false;
         if (key) {
-          var hay = (q.q + " " + q.options.map(function (o) { return o.t; }).join(" ") + " " + q.explain + " " + (q.basics || "")).toLowerCase();
+          var hay = (q.q + " " + q.options.map(function (o) { return o.t; }).join(" ") + " " + q.explain + " " + deepText(q)).toLowerCase();
           if (hay.indexOf(key) < 0) return false;
         }
         return true;
