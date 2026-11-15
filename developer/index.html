@@ -141,7 +141,7 @@
   /* スライダー */
   .slrow { margin: 14px 0; }
   .slhead { display: flex; justify-content: space-between; gap: 8px; font-size: .9rem; font-weight: 700; }
-  .slhead .slv { color: var(--accent); text-align: right; }
+  .slhead .slv { color: var(--accent); text-align: right; white-space: nowrap; flex: 0 0 auto; }
   .slrow input[type=range] { width: 100%; margin: 6px 0 0; }
   .slends { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); }
   /* AIに質問 */
@@ -838,22 +838,33 @@
     return card;
   }
 
-  /* ---------- 出題の重みづけ（おすすめ） ---------- */
+  /* ---------- 出題の重みづけ（ポイント制 ＋ 復習の期限） ---------- */
   var MODES = [
-    { v: "smart", t: "おすすめ（記録から自動で調整）", d: "未回答、まちがえた問題、苦手な分野、しばらく解いていない問題を、バランスよく選びます。" },
-    { v: "random", t: "ランダム（どれも同じ確率）", d: "記録に関係なく、完全にランダムに選びます。" },
-    { v: "unseen", t: "未回答を優先", d: "まだ解いていない問題を、優先して選びます。" },
-    { v: "wrong", t: "まちがえた問題を優先", d: "前回まちがえた問題、過去にまちがえた問題を、優先して選びます。" },
+    { v: "smart", t: "ポイント制（おすすめ）", d: "上のスライダーと、下の「出題のポイント」で、選ばれやすさを決めて、くじで選びます。" },
     { v: "blueprint", t: "本番の配点に合わせる", d: "公式の配点の割合に近くなるように、分野ごとの問題数を決めます（模擬試験の練習向け）。" }
   ];
-  // 復習の濃さ（スライダー）。新しい問題と、復習の問題の、どちらを多めに選ぶか
-  var RV = { nw: 4, rw: 1 };
-  var RV_TABLE = [{ nw: 7, rw: 0.4 }, { nw: 5.5, rw: 0.7 }, { nw: 4, rw: 1 }, { nw: 2.5, rw: 1.5 }, { nw: 1, rw: 2 }];
-  function setReview(lv) {
-    lv = parseInt(lv, 10);
-    var t = RV_TABLE[isNaN(lv) ? 2 : Math.max(0, Math.min(4, lv))];
-    RV.nw = t.nw; RV.rw = t.rw;
-  }
+  // 古い保存内容（ランダム、未回答を優先、など）は、ポイント制として読みます
+  function normMode(v) { return v === "blueprint" ? "blueprint" : "smart"; }
+
+  /*SCORE_BEGIN*/
+  // 視点（軸）: nw=まだ解いていない／ms=まちがえた／sk=自信のズレ／du=復習の期限／dm=苦手な分野／wt=配点の大きい分野／rn=ランダムさ
+  var AXIS_KEYS = ["nw", "ms", "sk", "du", "dm", "wt", "rn"];
+  var AXIS_DEFAULT = { nw: 2, ms: 2, sk: 2, du: 2, dm: 2, wt: 2, rn: 2 };
+  var AXIS_MULT = [0, 0.5, 1, 1.6, 2.4];          // スライダー 0〜4 → 重み
+  var RANDOM_GAMMA = [1.8, 1.3, 1.0, 0.6, 0.2];   // ランダムさ 0〜4 → ポイントの指数（小さいほど、均等に近づく）
+  var PRESETS = [                                  // 上の「出題の傾向」（0=新しい問題中心 … 4=復習中心）
+    { nw: 4, ms: 1, sk: 1, du: 1, dm: 2, wt: 2, rn: 2 },
+    { nw: 3, ms: 2, sk: 2, du: 1, dm: 2, wt: 2, rn: 2 },
+    { nw: 2, ms: 2, sk: 2, du: 2, dm: 2, wt: 2, rn: 2 },
+    { nw: 1, ms: 3, sk: 3, du: 3, dm: 2, wt: 2, rn: 2 },
+    { nw: 0, ms: 4, sk: 4, du: 4, dm: 2, wt: 2, rn: 2 }
+  ];
+  var DAY_MS = 86400000;
+  var INTERVAL_DAYS = [1, 3, 7, 14];              // 連続して自信を持って正解するほど、間隔を延ばす
+  function clampAx(v, def) { v = parseInt(v, 10); return isNaN(v) ? def : Math.max(0, Math.min(4, v)); }
+  function normAxes(a) { var o = {}; AXIS_KEYS.forEach(function (k) { o[k] = clampAx(a && a[k], AXIS_DEFAULT[k]); }); return o; }
+  function sameAxes(a, b) { return AXIS_KEYS.every(function (k) { return a[k] === b[k]; }); }
+  function presetOf(axes) { for (var i = 0; i < PRESETS.length; i++) if (sameAxes(PRESETS[i], axes)) return i; return -1; }
   // 前回の「自信」と「わからない」から、復習の優先度を決める
   function lastHist(s) { return s && s.hist && s.hist.length ? s.hist[s.hist.length - 1] : null; }
   function riskInfo(s) {
@@ -864,6 +875,76 @@
     if (!lh.ok && lh.conf === 2) return { add: 7, mult: 1, why: ["自信ありで不正解（思い込みの疑い）"] };
     if (lh.ok && lh.conf === 2) return { add: 0, mult: 0.6, why: [] };
     return { add: 0, mult: 1, why: [] };
+  }
+  // 復習の期限（間隔反復）: 「次に出す目安の間隔」と、「前回から、その何倍たったか（ratio）」を返す
+  function dueInfo(s, now, examTs) {
+    var lh = lastHist(s);
+    if (!s || !lh) return null;
+    var interval;
+    if (!lh.ok || lh.unk) interval = 0.25;                 // まちがい・わからない: 数時間後
+    else if (lh.conf === 0) interval = 0.5;                // まぐれの疑い: 半日後
+    else {
+      var streak = 0;
+      for (var i = s.hist.length - 1; i >= 0; i--) {
+        var e = s.hist[i];
+        if (e.ok && !e.unk && e.conf !== 0) streak++; else break;
+      }
+      interval = INTERVAL_DAYS[Math.min(Math.max(streak, 1) - 1, INTERVAL_DAYS.length - 1)];
+      if (lh.conf === 1) interval *= 0.6;                  // いまひとつの正解: 間隔を短めに
+    }
+    // 試験日が近いときは、残り日数の半分を、間隔の上限にする
+    if (examTs && examTs > now) interval = Math.min(interval, Math.max(0.5, (examTs - now) / DAY_MS / 2));
+    var elapsed = (now - (lh.ts || s.lastAt || now)) / DAY_MS;
+    return { interval: interval, ratio: elapsed / interval };
+  }
+  // 1問ごとの「選ばれやすさ（ポイント）」と、その理由。ctx = { axes, dacc, wmax, wts, now, examTs }
+  function scoreWeight(dom, s, ctx) {
+    var A = ctx.axes;
+    var M = function (k) { return AXIS_MULT[A[k]]; };
+    var w = 1, why = [];
+    if (!s) {
+      w += 4 * M("nw");
+      if (M("nw") > 0) why.push("未回答");
+    } else {
+      if (s.last === false) { w += 5 * M("ms"); if (M("ms") > 0) why.push("前回まちがえた"); }
+      else if (s.n > s.c) { w += 2 * M("ms"); if (M("ms") > 0) why.push("過去にまちがえた"); }
+      var acc = s.c / s.n;
+      if (acc < 0.6) { w += (1 - acc) * 3 * M("ms"); if (M("ms") > 0 && why.indexOf("前回まちがえた") < 0) why.push("正答率が低い"); }
+      var ri = riskInfo(s);
+      if (ri.add) { w += ri.add * M("sk"); if (M("sk") > 0) ri.why.forEach(function (x) { why.push(x); }); }
+      else if (ri.mult !== 1) w *= Math.pow(ri.mult, M("sk"));
+      var di = dueInfo(s, ctx.now, ctx.examTs);
+      if (di) {
+        if (di.ratio >= 1) { w += (1 + Math.min(di.ratio - 1, 3) * 3) * M("du"); if (M("du") > 0) why.push("復習の期限が来ている"); }
+        else w *= Math.pow(0.4 + 0.6 * Math.max(di.ratio, 0), M("du"));   // まだ早い問題は、後回し
+      }
+    }
+    if (ctx.wts && ctx.wts[dom] != null && ctx.wmax) {
+      w *= Math.pow(0.7 + 0.6 * ctx.wts[dom] / ctx.wmax, M("wt"));
+      if (ctx.wts[dom] >= ctx.wmax * 0.75 && M("wt") > 0) why.push("配点が大きい分野");
+    }
+    var da = ctx.dacc ? ctx.dacc[dom] : null;
+    if (da != null) {
+      w *= Math.pow(1 + (1 - da) * 0.8, M("dm"));
+      if (da < 0.5 && M("dm") > 0) why.push("苦手な分野");
+    }
+    w = Math.pow(Math.max(w, 0.05), RANDOM_GAMMA[A.rn]);
+    return { w: Math.max(w, 0.02), why: why };
+  }
+  /*SCORE_END*/
+
+  var curAxes = normAxes(AXIS_DEFAULT);
+  function setAxes(a) { curAxes = normAxes(a); }
+  function loadAxes() {
+    var p = load(K_PREFS, {});
+    if (p.axes && typeof p.axes === "object") return normAxes(p.axes);
+    var i = parseInt(p.rv, 10);
+    return normAxes(PRESETS[isNaN(i) || i < 0 || i > 4 ? 2 : i]);   // 以前の「出題の傾向」の保存内容も読めるように
+  }
+  function examTimestamp() {
+    if (load(K_PREFS, {}).examAdj === false || !CFG.examDate) return 0;
+    var t = new Date(CFG.examDate + "T00:00:00").getTime();
+    return isNaN(t) ? 0 : t;
   }
   function modeLabel(v) {
     for (var i = 0; i < MODES.length; i++) if (MODES[i].v === v) return MODES[i].t.replace(/（.*）/, "");
@@ -883,45 +964,6 @@
     var out = {};
     Object.keys(by).forEach(function (k) { out[k] = by[k].n ? by[k].c / by[k].n : null; });
     return out;
-  }
-  // 1問ごとの「選ばれやすさ（重み）」と、その理由
-  function weightOf(q, mode, stats, dacc, wmax) {
-    var s = stats[q.id], DAY = 86400000;
-    if (mode === "random") return { w: 1, why: ["ランダム"] };
-    if (mode === "unseen") return s ? { w: 1, why: [] } : { w: 8, why: ["未回答"] };
-    if (mode === "wrong") {
-      if (!s) return { w: 1.5, why: ["未回答"] };
-      if (s.last === false) return { w: 8, why: ["前回まちがえた"] };
-      if (s.n > s.c) return { w: 4, why: ["過去にまちがえた"] };
-      return { w: 1, why: [] };
-    }
-    // おすすめ（smart）
-    var w = 1, why = [];
-    if (!s) { w += RV.nw; why.push("未回答"); }
-    else {
-      if (s.last === false) { w += 5 * RV.rw; why.push("前回まちがえた"); }
-      else if (s.n > s.c) { w += 2 * RV.rw; why.push("過去にまちがえた"); }
-      var acc = s.c / s.n;
-      if (acc < 0.6) { w += (1 - acc) * 3; if (why.indexOf("前回まちがえた") < 0) why.push("正答率が低い"); }
-      var days = (Date.now() - s.lastAt) / DAY;
-      if (s.last === true) {
-        if (days < 1) w *= 0.3;                       // さっき正解した問題は、少し後回し
-        else if (days >= 3) { w += 1; why.push("しばらく解いていない"); }
-      }
-      var ri = riskInfo(s);
-      if (ri.add) { w += ri.add * RV.rw; ri.why.forEach(function (x) { why.push(x); }); }
-      else if (ri.mult !== 1) w *= ri.mult;
-    }
-    if (WEIGHTS[q.domain] != null && wmax) {
-      w *= 0.7 + 0.6 * WEIGHTS[q.domain] / wmax;       // 配点の大きい分野を、やや多めに
-      if (WEIGHTS[q.domain] >= wmax * 0.75) why.push("配点が大きい分野");
-    }
-    var da = dacc[q.domain];
-    if (da != null) {
-      w *= 1 + (1 - da) * 0.8;                         // 苦手な分野を、やや多めに
-      if (da < 0.5) why.push("苦手な分野");
-    }
-    return { w: Math.max(w, 0.05), why: why };
   }
   // 重みつきで、重複なしにn個を選ぶ
   function sampleWeighted(items, n) {
@@ -957,8 +999,8 @@
       chosen = pickBlueprint(pool, n);
       chosen.forEach(function (q) { reasons[q.id] = ["配点に合わせた出題"]; });
     } else {
-      var dacc = domainAccuracy(stats), wmax = maxWeight();
-      var items = pool.map(function (q) { var r = weightOf(q, mode, stats, dacc, wmax); return { q: q, w: r.w, why: r.why }; });
+      var ctx = { axes: curAxes, dacc: domainAccuracy(stats), wmax: maxWeight(), wts: WEIGHTS, now: Date.now(), examTs: examTimestamp() };
+      var items = pool.map(function (q) { var r = scoreWeight(q.domain, stats[q.id], ctx); return { q: q, w: r.w, why: r.why }; });
       chosen = sampleWeighted(items, n).map(function (p) { reasons[p.q.id] = p.why; return p.q; });
     }
     return { qs: chosen, reasons: reasons };
@@ -977,7 +1019,7 @@
     var pool = poolFor(o);
     if (!pool.length) { alert("該当する問題がありません。条件を変えてください。"); return; }
     var n = !o.n ? pool.length : Math.min(o.n, pool.length);
-    setReview(o.rv);
+    setAxes(o.axes);
     var pick = chooseQuestions(pool, n, o.mode);
     beginRun(pick.qs, o.sq, o.so, pick.reasons, modeLabel(o.mode), o.timer);
   }
@@ -995,6 +1037,9 @@
       if (lastWrong) bullets.push("前回まちがえた問題が " + lastWrong + " 問あります。早めに復習すると、定着しやすくなります。");
       var shaky = ALLQ.filter(function (q) { var s = stats[q.id]; return s && s.last !== false && riskInfo(s).add > 0; }).length;
       if (shaky) bullets.push("まぐれ正解の疑い・わからなかった問題が " + shaky + " 問あります（自信が低かった、または「わからない」を選んだ問題です）。");
+      var nowT = Date.now(), exT = examTimestamp();
+      var dueN = ALLQ.filter(function (q) { var s1 = stats[q.id]; var di = s1 && dueInfo(s1, nowT, exT); return di && di.ratio >= 1; }).length;
+      if (dueN) bullets.push("復習の期限が来ている問題が " + dueN + " 問あります（前回から、目安の間隔があいた問題です）。");
       var dacc = domainAccuracy(stats), wmax = maxWeight(), weak = null, wp = 0;
       Object.keys(dacc).forEach(function (d) {
         if (dacc[d] == null) return;
@@ -1021,7 +1066,13 @@
       input,
       h("div", { class: "slends" }, [h("span", { text: labels[0] }), h("span", { text: labels[labels.length - 1] })])
     ]);
-    return { el: el, get: function () { return parseInt(input.value, 10); }, onChange: function (f) { cbs.push(f); } };
+    return {
+      el: el,
+      get: function () { return parseInt(input.value, 10); },
+      onChange: function (f) { cbs.push(f); },
+      set: function (v) { input.value = String(v); show(); },
+      setCustom: function (on) { if (on) cur.textContent = "カスタム（詳細設定で調整）"; else show(); }
+    };
   }
   function mergePrefs(patch) {
     var p = load(K_PREFS, {});
@@ -1063,7 +1114,10 @@
     var REVIEW_STEPS = ["新しい問題を中心に", "新しい問題を多めに", "ちょうどよく（おすすめ）", "復習を多めに", "復習を中心に"];
     function stepVal(v, def, max) { v = parseInt(v, 10); return isNaN(v) ? def : Math.max(0, Math.min(max, v)); }
     var slN = slider("問題数", N_STEPS.map(function (v) { return v + "問"; }), stepVal(prefs.qn, 1, 4));
-    var slRv = slider("出題の傾向", REVIEW_STEPS, stepVal(prefs.rv, 2, 4));
+    var axes0 = loadAxes(), pi0 = presetOf(axes0);
+    var axSl = null;   // 下の「出題のポイント」のスライダー（あとで作ります）
+    var slRv = slider("出題の傾向", REVIEW_STEPS, pi0 >= 0 ? pi0 : 2);
+    if (pi0 < 0) slRv.setCustom(true);
     var slPace = slider("タイマー", PACE_STEPS.map(function (p) { return p.t; }), stepVal(prefs.pace, 2, 4));
     rc.appendChild(slN.el); rc.appendChild(slRv.el); rc.appendChild(slPace.el);
     var quickNote = h("p", { class: "small" });
@@ -1072,17 +1126,24 @@
       var p = load(K_PREFS, {});   // 下の「詳細設定」で決めた内容も使います
       return {
         sets: p.setsSel && p.setsSel.length ? p.setsSel : null,
-        dom: p.dom || "", scope: p.scope || "all", mode: p.mode || "smart",
+        dom: p.dom || "", scope: p.scope || "all", mode: normMode(p.mode),
         sq: p.sq !== false, so: p.so !== false,
-        n: N_STEPS[slN.get()], rv: slRv.get(), timer: PACE_STEPS[slPace.get()].f()
+        n: N_STEPS[slN.get()], axes: loadAxes(), timer: PACE_STEPS[slPace.get()].f()
       };
     }
     function quickUpdate() {
       var o = quickOpts(), pool = poolFor(o), n = Math.min(o.n, pool.length);
       quickNote.textContent = "対象 " + pool.length + " 問から " + n + " 問を選びます（目安 約 " + Math.round(n * 1.5) + " 分）。";
-      mergePrefs({ qn: slN.get(), rv: slRv.get(), pace: slPace.get() });
+      mergePrefs({ qn: slN.get(), pace: slPace.get() });
     }
-    [slN, slRv, slPace].forEach(function (sl) { sl.onChange(quickUpdate); });
+    [slN, slPace].forEach(function (sl) { sl.onChange(quickUpdate); });
+    // 上の「出題の傾向」を動かすと、下の「出題のポイント」も、一緒に動く
+    slRv.onChange(function () {
+      var i = slRv.get(), ax = PRESETS[i];
+      mergePrefs({ axes: ax, rv: i });
+      if (axSl) AXIS_KEYS.forEach(function (k) { axSl[k].set(ax[k]); });
+      quickUpdate();
+    });
     quickUpdate();
     rc.appendChild(h("div", { class: "row" }, [h("button", { class: "primary big", text: "おすすめで始める", onclick: function () { launch(quickOpts()); } })]));
     box.appendChild(rc);
@@ -1124,15 +1185,58 @@
     var timeNote = h("span", { class: "small" });
     card.appendChild(timeNote);
 
-    card.appendChild(h("h2", { style: "font-size:.95rem", text: "出題の傾向" }));
+    card.appendChild(h("h2", { style: "font-size:.95rem", text: "出題の方式" }));
     var modeRadios = MODES.map(function (m) {
       var r = h("input", { type: "radio", name: "mode", value: m.v });
-      r.checked = (prefs.mode || "smart") === m.v;
+      r.checked = normMode(prefs.mode) === m.v;
       r.addEventListener("change", update);
       card.appendChild(h("label", { class: "check", style: "margin-bottom:0" }, [r, h("span", { text: m.t })]));
       card.appendChild(h("div", { class: "small", style: "margin:0 0 6px 28px", text: m.d }));
       return r;
     });
+
+    // 出題のポイント（視点ごとの重み）。上の「出題の傾向」は、これらをまとめて動かす近道です
+    card.appendChild(h("h2", { style: "font-size:.95rem", text: "出題のポイント（視点ごとの重み）" }));
+    card.appendChild(h("p", { class: "small", text: "問題ごとに、視点ごとのポイントを足して、合計が高いほど、選ばれやすくなります（最後は、くじで決めます）。上の「出題の傾向」を動かすと、ここも一緒に動きます。ここを直接さわると、上は「カスタム」になります。" }));
+    var LV = ["使わない", "弱め", "ふつう", "強め", "最大"];
+    var AX_DEFS = [
+      { k: "nw", t: "まだ解いていない問題" },
+      { k: "ms", t: "まちがえた問題（前回・過去・正答率が低い）" },
+      { k: "sk", t: "自信のズレ（まぐれ正解・思い込み・わからない）" },
+      { k: "du", t: "復習の期限（忘れかけた頃に出す）" },
+      { k: "dm", t: "苦手な分野" },
+      { k: "wt", t: "配点の大きい分野" },
+      { k: "rn", t: "ランダムさ", labels: ["ほぼ固定", "少し", "ふつう", "多め", "ほぼ均等"] }
+    ];
+    axSl = {};
+    AX_DEFS.forEach(function (d) {
+      var s1 = slider(d.t, d.labels || LV, axes0[d.k]);
+      axSl[d.k] = s1;
+      card.appendChild(s1.el);
+      s1.onChange(function () {
+        var ax = {};
+        AXIS_KEYS.forEach(function (k) { ax[k] = axSl[k].get(); });
+        var pi = presetOf(ax);
+        mergePrefs({ axes: ax, rv: pi });
+        if (pi >= 0) slRv.set(pi); else slRv.setCustom(true);
+        quickUpdate();
+      });
+    });
+    card.appendChild(h("div", { class: "row", style: "margin:4px 0 8px" }, [
+      h("button", { class: "ghost small", text: "標準（ちょうどよく）に戻す", onclick: function () {
+        var ax = PRESETS[2];
+        mergePrefs({ axes: ax, rv: 2 });
+        AXIS_KEYS.forEach(function (k) { axSl[k].set(ax[k]); });
+        slRv.set(2);
+        quickUpdate();
+      } })
+    ]));
+    if (CFG.examDate) {
+      var exCb = h("input", { type: "checkbox" }); exCb.checked = prefs.examAdj !== false;
+      exCb.addEventListener("change", function () { mergePrefs({ examAdj: exCb.checked }); });
+      var left = Math.ceil((new Date(CFG.examDate + "T00:00:00").getTime() - Date.now()) / DAY_MS);
+      card.appendChild(h("label", { class: "check" }, [exCb, h("span", { text: "試験日（" + CFG.examDate + (left >= 0 ? "、あと " + left + " 日" : "") + "）に合わせて、復習の間隔を縮める" })]));
+    }
 
     // タイマーの設定（保存できます）
     var tm = loadTimer();
@@ -1191,7 +1295,7 @@
         sets: checks.filter(function (x) { return x.cb.checked; }).map(function (x) { return x.set.id; }),
         dom: domSel.value,
         scope: scopeRadios.filter(function (r) { return r.checked; })[0].value,
-        n: N_STEPS[slN.get()], rv: slRv.get(),
+        n: N_STEPS[slN.get()], axes: loadAxes(),
         mode: modeRadios.filter(function (r) { return r.checked; })[0].value,
         sq: shQ.checked, so: shO.checked
       };

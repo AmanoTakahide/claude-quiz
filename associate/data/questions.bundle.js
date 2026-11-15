@@ -32,7 +32,8 @@ window.QUIZ_CONFIG = {
       "name": "トラブルシューティングと改善",
       "weight": 10
     }
-  ]
+  ],
+  "examDate": "2026-11-25"
 };
 window.QUESTION_SETS = [
   {

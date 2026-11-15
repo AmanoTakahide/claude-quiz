@@ -40,7 +40,8 @@ window.QUIZ_CONFIG = {
   "timer": {
     "answerSec": 90,
     "reviewSec": 180
-  }
+  },
+  "examDate": "2026-11-26"
 };
 window.QUESTION_SETS = [
   {
