@@ -33,7 +33,11 @@ window.QUIZ_CONFIG = {
       "weight": 10
     }
   ],
-  "examDate": "2026-11-25"
+  "examDate": "2026-11-25",
+  "firebase": {
+    "apiKey": "AIzaSyD1xfrxa8GI1MG7HmV78iB-Bw4K8awo8tU",
+    "projectId": "claude-quiz-sync"
+  }
 };
 window.QUESTION_SETS = [
   {

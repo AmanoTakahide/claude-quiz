@@ -41,7 +41,11 @@ window.QUIZ_CONFIG = {
     "answerSec": 90,
     "reviewSec": 180
   },
-  "examDate": "2026-11-26"
+  "examDate": "2026-11-26",
+  "firebase": {
+    "apiKey": "AIzaSyD1xfrxa8GI1MG7HmV78iB-Bw4K8awo8tU",
+    "projectId": "claude-quiz-sync"
+  }
 };
 window.QUESTION_SETS = [
   {

@@ -150,7 +150,6 @@
 </style>
 </head>
 <body>
-<a href="../" style="position:fixed;right:10px;bottom:10px;z-index:9999;background:#1f2937;color:#fff;padding:8px 12px;border-radius:999px;font:13px sans-serif;text-decoration:none;opacity:.9">試験を選びなおす</a>
 <main id="app"></main>
 
 <!-- 設定と問題データ（tools/build_data.py が、config.json と data/sets/*.json から自動生成します） -->
@@ -570,6 +569,7 @@
     for (var i = 0; i < list.length; i++) if (list[i].id === r.id) { found = i; break; }
     if (found >= 0) list[found] = entry; else list.unshift(entry);
     save(K_HIST, list.slice(0, 50));
+    if (typeof syncSoon === "function") syncSoon();
   }
   function validRun(r) {
     return r && Array.isArray(r.order) && Array.isArray(r.results) && r.order.length > 0 &&
@@ -715,6 +715,7 @@
     var notice = xferNotice;
     xferNotice = null;
     if (notice) box.appendChild(h("div", { class: notice.ok ? "card" : "banner", text: notice.msg }));
+    box.appendChild(syncCard());
 
     box.appendChild(h("div", { class: "card" }, [
       h("h2", { text: "この端末の記録を、別の端末に移す" }),
@@ -775,6 +776,152 @@
     return box;
   }
 
+  /* ---------- 端末間の自動同期（Firebase Firestore。ログインなし、合言葉つき） ---------- */
+  /*SYNC_BEGIN*/
+  var FS_ROOT = "https://firestore.googleapis.com/v1/projects/";
+  function fsUrl(cfg, code, query) {
+    return FS_ROOT + encodeURIComponent(cfg.projectId) + "/databases/(default)/documents/sync/" + encodeURIComponent(code) + "?" + (query ? query + "&" : "") + "key=" + encodeURIComponent(cfg.apiKey);
+  }
+  function validCode(c) { return typeof c === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(c); }
+  // 読み間違えやすい文字（0 と o、1 と l など）を避けた、10文字の合言葉を作る
+  function genCode() {
+    var chars = "abcdefghjkmnpqrstuvwxyz23456789", n = 10, out = "", a = new Uint32Array(n), i;
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(a);
+    else for (i = 0; i < n; i++) a[i] = Math.floor(Math.random() * 4294967296);
+    for (i = 0; i < n; i++) out += chars.charAt(a[i] % chars.length);
+    return out;
+  }
+  // 読み込み: 文書がなければ null、あれば、その試験の記録（文字列）を返す
+  async function fsGet(cfg, code, exam, f) {
+    var r = await f(fsUrl(cfg, code));
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error("読み込みに失敗しました（" + r.status + "）");
+    var j = await r.json();
+    var fld = j.fields && j.fields[exam];
+    return fld && typeof fld.stringValue === "string" ? fld.stringValue : null;
+  }
+  // 書き込み: その試験の記録だけを、更新する（もう片方の試験の記録は、そのまま）
+  async function fsPut(cfg, code, exam, text, f) {
+    var body = { fields: {} };
+    body.fields[exam] = { stringValue: text };
+    body.fields.at = { integerValue: String(Date.now()) };
+    var r = await f(fsUrl(cfg, code, "updateMask.fieldPaths=" + exam + "&updateMask.fieldPaths=at"), {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error("書き込みに失敗しました（" + r.status + "）");
+  }
+  /*SYNC_END*/
+
+  var K_SYNC = "claudeQuizSync";   // 2つの試験で共通（合言葉を、1回入れれば、両方に効く）
+  var pendingSync = null;        // 「合言葉つきのリンク」で開いたときの、確認待ちの合言葉
+  (function () {
+    var m = /[#&]sync=([A-Za-z0-9_-]{8,64})/.exec(location.hash || "");
+    if (m) {
+      if (load(K_SYNC, {}).code !== m[1]) pendingSync = m[1];
+      try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+    }
+  })();
+  function syncCfg() { var f = CFG.firebase; return f && f.apiKey && f.projectId ? f : null; }
+  function fmtAt(ts) { return ts ? fmt(ts) : "まだ同期していません"; }
+  var syncTimer = null, syncing = false, syncAgain = false, syncStatusEl = null;
+  function syncStatusText() {
+    var st = load(K_SYNC, {});
+    if (!st.code) return "オフ";
+    if (syncing) return "同期中…";
+    var last = st["last_" + examKey()];
+    return (st.err ? "うまくいきませんでした: " + st.err + "　／　" : "") + "最後に同期: " + fmtAt(last);
+  }
+  function refreshSyncStatus() { if (syncStatusEl && document.body.contains(syncStatusEl)) syncStatusEl.textContent = syncStatusText(); }
+  // サーバーの記録を読む → 今の記録と合わせる → 合わせた結果を、書き戻す
+  async function syncNow() {
+    var st = load(K_SYNC, {}), cfg = syncCfg();
+    if (!cfg || !validCode(st.code)) return { ok: false, msg: "合言葉が、まだ設定されていません。" };
+    if (syncing) { syncAgain = true; return { ok: true, msg: "同期中です。" }; }
+    syncing = true; refreshSyncStatus();
+    var result;
+    try {
+      var remote = await fsGet(cfg, st.code, examKey(), function (u, o) { return fetch(u, o); });
+      if (remote) {
+        var data = JSON.parse(remote);
+        if (data && data.app === PREFIX && data.v === XFER_VERSION && data.qstats && Array.isArray(data.history)) {
+          save(K_QSTAT, mergeQStats(load(K_QSTAT, {}), data.qstats));
+          save(K_HIST, mergeHistory(load(K_HIST, []), data.history));
+        }
+      }
+      await fsPut(cfg, st.code, examKey(), JSON.stringify(buildExport()), function (u, o) { return fetch(u, o); });
+      var st2 = load(K_SYNC, {}); st2["last_" + examKey()] = Date.now(); st2.err = null; save(K_SYNC, st2);
+      result = { ok: true, msg: "同期しました。" };
+    } catch (e) {
+      var st3 = load(K_SYNC, {}); st3.err = String(e && e.message || e); save(K_SYNC, st3);
+      result = { ok: false, msg: "同期できませんでした（" + st3.err + "）。通信を確認して、あとでもう一度お試しください。記録は、この端末に残っています。" };
+    }
+    syncing = false; refreshSyncStatus();
+    if (syncAgain) { syncAgain = false; syncSoon(500); }
+    return result;
+  }
+  function syncSoon(delay) {
+    var st = load(K_SYNC, {});
+    if (!syncCfg() || !validCode(st.code) || st.on === false) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(function () { syncNow(); }, delay == null ? 3000 : delay);
+  }
+  function startSync(code) {
+    if (!validCode(code)) { xferNotice = { ok: false, msg: "合言葉は、半角の英数字（- と _ も可）で、8文字以上にしてください。" }; go("xfer"); return; }
+    save(K_BACKUP, { at: Date.now(), qstats: load(K_QSTAT, {}), history: load(K_HIST, []) });   // 合わせる前の記録を、1世代だけ残す
+    var st = load(K_SYNC, {}); st.code = code; st.on = true; st.err = null; save(K_SYNC, st);
+    syncNow().then(function (r) {
+      xferNotice = r.ok ? { ok: true, msg: "同期をはじめました。この端末の記録と、サーバーの記録を合わせました。もう1台でも、同じ合言葉を入れると、記録が合わさります。" } : r;
+      go("xfer");
+    });
+  }
+  function stopSync() {
+    var st = load(K_SYNC, {}); delete st.code; st.on = false; save(K_SYNC, st);
+    xferNotice = { ok: true, msg: "この端末の同期を、やめました（サーバーの記録は、そのまま残っています）。" };
+    go("xfer");
+  }
+  function syncLink(code) { return location.origin + location.pathname + "#sync=" + code; }
+  function syncInvite() {
+    return h("div", { class: "notice" }, [
+      h("div", { text: "合言葉つきのリンクから開きました。この端末で、記録の自動同期を、始めますか？（この端末の記録と、サーバーの記録を、合わせます。消えることはありません）" }),
+      h("div", { class: "row" }, [
+        h("button", { text: "同期をはじめる", onclick: function () { var c = pendingSync; pendingSync = null; startSync(c); } }),
+        h("button", { class: "ghost", text: "あとで", onclick: function () { pendingSync = null; go(tab); } })
+      ])
+    ]);
+  }
+  function syncCard() {
+    var cfg = syncCfg(), st = load(K_SYNC, {});
+    var card = h("div", { class: "card" });
+    card.appendChild(h("h2", { text: "端末間の自動同期" }));
+    if (!cfg) { card.appendChild(h("p", { class: "small", text: "この版では、同期が設定されていません。" })); return card; }
+    if (!validCode(st.code)) {
+      card.appendChild(h("p", { class: "small", text: "スマホとパソコンなど、複数の端末の記録を、自動で合わせます。「合言葉」を決めて、同じ合言葉を入れた端末どうしで、記録が合わさります（ログインは要りません）。" }));
+      card.appendChild(h("div", { class: "row" }, [h("button", { text: "同期をはじめる（合言葉を作る）", onclick: function () { startSync(genCode()); } })]));
+      var inp = h("input", { type: "text", placeholder: "もう1台で作った合言葉を入力", autocapitalize: "off", autocomplete: "off", style: "width:100%;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text);margin-top:10px" });
+      card.appendChild(inp);
+      card.appendChild(h("div", { class: "row" }, [h("button", { class: "ghost", text: "この合言葉で、同期をはじめる", onclick: function () { startSync(inp.value.trim()); } })]));
+      card.appendChild(h("p", { class: "small", text: "合言葉を知っている人は、その記録を、読み書きできます。個人用の仕組みなので、他の人には、教えないでください。" }));
+      return card;
+    }
+    syncStatusEl = h("p", { class: "small", text: syncStatusText() });
+    var msg = h("span", { class: "small" });
+    card.appendChild(h("p", { text: "同期: オン" }));
+    card.appendChild(syncStatusEl);
+    card.appendChild(h("div", { class: "small", text: "合言葉:" }));
+    card.appendChild(h("div", { style: "font-size:1.2rem;font-weight:700;letter-spacing:.08em;margin:2px 0 6px;word-break:break-all", text: st.code }));
+    card.appendChild(h("div", { class: "row" }, [
+      h("button", { class: "ghost", text: "合言葉をコピー", onclick: function () { copyText(st.code, msg, "合言葉をコピーしました。"); } }),
+      h("button", { class: "ghost", text: "合言葉つきのリンクをコピー", onclick: function () { copyText(syncLink(st.code), msg, "リンクをコピーしました。別の端末で開くと、同期を始められます。"); } })
+    ]));
+    card.appendChild(msg);
+    card.appendChild(h("div", { class: "row" }, [
+      h("button", { text: "今すぐ同期", onclick: function () { syncNow().then(function (r) { xferNotice = r; go("xfer"); }); } }),
+      h("button", { class: "ghost", text: "この端末の同期をやめる", onclick: stopSync })
+    ]));
+    card.appendChild(h("p", { class: "small", text: "問題を解いたあと、数秒で、自動で同期されます。もう1台でも、同じ合言葉を入れるか、上のリンクを開くと、記録が合わさります。「記録をファイルに保存」は、バックアップとして、使えます。" }));
+    return card;
+  }
+
   /* ---------- 画面の枠（タブ） ---------- */
   var TABS = [
     { id: "solve", label: "解く" },
@@ -794,6 +941,7 @@
       nav.appendChild(h("button", { class: "tab" + (t.id === active ? " active" : ""), text: t.label, onclick: function () { go(t.id); } }));
     });
     app.appendChild(nav);
+    if (pendingSync) app.appendChild(syncInvite());
     app.appendChild(content);
   }
   function go(t) {
@@ -1694,7 +1842,10 @@
   }
 
   go("solve");
+  syncSoon(300);   // 開いたときに、サーバーの記録を、取り込む
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) syncSoon(500); });   // 別の端末から戻ったときにも
 })();
 </script>
+<a href="../" style="position:fixed;right:10px;bottom:10px;z-index:9999;background:#1f2937;color:#fff;padding:8px 12px;border-radius:999px;font:13px sans-serif;text-decoration:none;opacity:.9">試験を選びなおす</a>
 </body>
 </html>
