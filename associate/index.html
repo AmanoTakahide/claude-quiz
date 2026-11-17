@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta name="robots" content="noindex,nofollow">
 <meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>練習問題</title>
 <style>
@@ -147,6 +147,45 @@
   /* AIに質問 */
   .airow { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   details.more.card > summary { font-weight: 700; }
+  /* 教科書（読み物） */
+  .tb-lead { margin: 4px 0 10px; }
+  .tb-prog { margin: 8px 0 4px; }
+  .tb-group { margin: 18px 0 6px; font-size: .88rem; font-weight: 700; color: var(--muted); }
+  .tb-chap { display: flex; gap: 12px; align-items: center; padding: 12px 12px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; background: var(--card); cursor: pointer; }
+  .tb-chap:hover { border-color: var(--accent); }
+  .tb-no { flex: 0 0 auto; min-width: 2.9em; text-align: center; font-weight: 700; color: var(--accent); background: var(--accent-weak); border-radius: 8px; padding: 4px 6px; font-size: .9rem; }
+  .tb-chap.done .tb-no { background: var(--ok-bg); color: var(--ok); }
+  .tb-ct { flex: 1 1 auto; min-width: 0; }
+  .tb-ct strong { display: block; line-height: 1.5; }
+  .tb-ct span { display: block; font-size: .82rem; color: var(--muted); line-height: 1.6; }
+  .tb-title { font-size: 1.25rem; line-height: 1.5; margin: 6px 0 10px; }
+  .tb-goal { background: var(--accent-weak); border-radius: 10px; padding: 12px 16px; margin: 10px 0 6px; }
+  .tb-goal strong { color: var(--accent); }
+  .tb-goal ul { margin: 6px 0 0; padding-left: 1.3em; }
+  .tb-body { font-size: 1.02rem; line-height: 2; }
+  .tb-h { font-size: 1.1rem; margin: 30px 0 8px; padding-bottom: 4px; border-bottom: 2px solid var(--accent); line-height: 1.5; }
+  .tb-p { margin: 10px 0; }
+  .tb-ul { margin: 10px 0; padding-left: 1.3em; }
+  .tb-ul li { margin: 6px 0; }
+  .tb-box { margin: 14px 0; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); line-height: 1.9; }
+  .tb-bt { font-size: .82rem; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+  .tb-box.def { border-left: 4px solid var(--accent); }
+  .tb-box.analogy { background: var(--accent-weak); border-color: transparent; }
+  .tb-box.note { border-left: 4px solid var(--warn); }
+  .tb-box.note .tb-bt { color: var(--warn); }
+  .tb-tp { margin: 6px 0; }
+  .tb-ex { margin: 14px 0; border: 1px dashed var(--line); border-radius: 10px; overflow: hidden; background: var(--card); }
+  .tb-ex .tb-bt { padding: 6px 12px; margin: 0; background: var(--bg); border-bottom: 1px dashed var(--line); }
+  .tb-ex pre { margin: 0; padding: 10px 12px; font-size: .86rem; line-height: 1.7; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, Consolas, "Yu Gothic UI", monospace; }
+  .tb-flow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 14px 0; }
+  .tb-flow .fb { border: 1px solid var(--accent); background: var(--card); padding: 6px 12px; border-radius: 8px; font-size: .92rem; line-height: 1.6; }
+  .tb-flow .fa { color: var(--accent); font-weight: 700; }
+  .tb-recap { margin: 26px 0 8px; padding: 12px 16px; border-radius: 10px; background: var(--ok-bg); }
+  .tb-recap strong { color: var(--ok); }
+  .tb-recap ol { margin: 6px 0 0; padding-left: 1.4em; }
+  .tb-foot { margin-top: 18px; }
+  .tb-nav { display: flex; gap: 8px; justify-content: space-between; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
+  @media (max-width: 560px) { .tb-body { font-size: 1rem; } .tb-nav button { padding: 8px 12px; } }
 </style>
 </head>
 <body>
@@ -311,7 +350,7 @@
   function viewGloss() {
     var box = h("div"), card = h("div", { class: "card" });
     card.appendChild(h("h2", { text: "用語集" }));
-    card.appendChild(h("p", { class: "small", text: "AIやClaudeの開発で、よく出てくる言葉の意味・ニュアンス・使われ方・実務の場面です（自作。公式の定義ではありません）。解説の中の点線の言葉は、タップするとここと同じ説明が出ます。" }));
+    card.appendChild(h("p", { class: "small", text: "AIやClaudeを使う仕事・開発で、よく出てくる言葉の意味・ニュアンス・使われ方・実務の場面です（自作。公式の定義ではありません）。解説の中の点線の言葉は、タップするとここと同じ説明が出ます。" }));
     var search = h("input", { type: "search", placeholder: "用語を検索（例: キャッシュ）", style: "width:100%;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)" });
     var count = h("p", { class: "small" }), list = h("div");
     card.appendChild(search); card.appendChild(count);
@@ -922,6 +961,112 @@
     return card;
   }
 
+  /* ---------- 教科書（入門の読み物） ---------- */
+  var TB = window.TEXTBOOK || [];
+  var K_READ = PREFIX + "Read";
+  var bookCur = null;
+  function readMap() { var m = load(K_READ, {}); return m && typeof m === "object" ? m : {}; }
+  function setRead(id, on) { var m = readMap(); if (on) m[id] = Date.now(); else delete m[id]; save(K_READ, m); }
+  function tbIndex(id) { for (var i = 0; i < TB.length; i++) if (TB[i].id === id) return i; return -1; }
+  function openChapter(id) { bookCur = id; go("book"); window.scrollTo(0, 0); }
+  function tbBlock(b) {
+    if (b.p != null) return h("p", { class: "tb-p" }, annotate(b.p));
+    if (b.term) return h("div", { class: "tb-box def" }, [h("div", { class: "tb-bt", text: "用語ボックス" })].concat(b.term.map(function (x) {
+      return h("p", { class: "tb-tp" }, [h("strong", { text: x.t + "：" })].concat(annotate(x.d)));
+    })));
+    if (b.analogy) return h("div", { class: "tb-box analogy" }, [h("div", { class: "tb-bt", text: "たとえるなら" })].concat(annotate(b.analogy)));
+    if (b.note) return h("div", { class: "tb-box note" }, [h("div", { class: "tb-bt", text: "ここに注意" })].concat(annotate(b.note)));
+    if (b.points) return h("ul", { class: "tb-ul" }, b.points.map(function (t) { return h("li", null, annotate(t)); }));
+    if (b.flow) {
+      var parts = [];
+      b.flow.forEach(function (t, i) {
+        if (i) parts.push(h("span", { class: "fa", text: "→" }));
+        parts.push(h("span", { class: "fb", text: t }));
+      });
+      return h("div", { class: "tb-flow" }, parts);
+    }
+    if (b.ex) return h("div", { class: "tb-ex" }, [h("div", { class: "tb-bt", text: b.ex.title || "例" }), h("pre", { text: (b.ex.lines || []).join("\n") })]);
+    return h("span");
+  }
+  function tbAskText(c) {
+    return ["Claude の認定資格の勉強で、教科書の「" + c.title + "」を読みました。", "初心者にも分かるように、たとえ話を使って、この章の要点をもう一度、やさしく説明してください。わからない用語があれば、先に意味を教えてください。", "", "この章でわかるはずのこと:"].concat(c.goal.map(function (g) { return "・" + g; })).join("\n");
+  }
+  function viewBookToc() {
+    var box = h("div"), card = h("div", { class: "card" });
+    var rd = readMap(), done = TB.filter(function (c) { return rd[c.id]; }).length;
+    card.appendChild(h("h2", { text: "教科書（入門の読み物）" }));
+    card.appendChild(h("p", { class: "tb-lead", text: "公式の講座を、はじめての人向けに、やさしく書き直した読み物です。1章 約6〜8分。まずは浅く、全体を1周するための資料で、これだけで合格をねらうものではありません。わからない言葉は、点線の下線をタップすると意味が出ます。" }));
+    card.appendChild(h("div", { class: "tb-prog" }, [h("div", { class: "bar" }, [h("div", { style: "width:" + pct(done, TB.length) + "%" })])]));
+    card.appendChild(h("p", { class: "small", text: "読了 " + done + " / " + TB.length + " 章（この端末の記録です）" }));
+    var next = TB.filter(function (c) { return !rd[c.id]; })[0];
+    if (next) card.appendChild(h("div", { class: "row", style: "margin-top:4px" }, [h("button", { class: "primary", text: (done ? "つづきから読む：" : "最初から読む：") + next.no + " " + next.title, onclick: function () { openChapter(next.id); } })]));
+    box.appendChild(card);
+    var lastG = null;
+    TB.forEach(function (c) {
+      if (c.group !== lastG) { box.appendChild(h("div", { class: "tb-group", text: c.group })); lastG = c.group; }
+      box.appendChild(h("div", { class: "tb-chap" + (rd[c.id] ? " done" : ""), role: "button", tabindex: "0", onclick: function () { openChapter(c.id); } }, [
+        h("div", { class: "tb-no", text: rd[c.id] ? "✓ " + c.no : c.no }),
+        h("div", { class: "tb-ct" }, [h("strong", { text: c.title }), h("span", { text: c.summary + "（約" + c.minutes + "分）" })])
+      ]));
+    });
+    box.appendChild(h("p", { class: "small", text: "※ Claudeが、公式の講座と公開ドキュメントをもとに、自分の言葉でまとめた読み物です。公式の見解ではなく、試験の出題範囲を保証するものでもありません。正確な内容や最新の情報は、公式の講座・ドキュメントで確認してください。" }));
+    return box;
+  }
+  function viewChapter(i) {
+    var c = TB[i], rd = readMap(), isDone = !!rd[c.id];
+    var box = h("div");
+    var nav = function () {
+      var n = h("div", { class: "tb-nav" }, [h("button", { class: "ghost small", text: "← 目次", onclick: function () { bookCur = null; go("book"); window.scrollTo(0, 0); } })]);
+      var r = h("span", null, []);
+      if (i > 0) r.appendChild(h("button", { class: "ghost small", text: "← 前の章", style: "margin-right:6px", onclick: function () { openChapter(TB[i - 1].id); } }));
+      if (i < TB.length - 1) r.appendChild(h("button", { class: "ghost small", text: "次の章 →", onclick: function () { openChapter(TB[i + 1].id); } }));
+      n.appendChild(r);
+      return n;
+    };
+    box.appendChild(nav());
+    var card = h("div", { class: "card" });
+    card.appendChild(h("div", { class: "tags" }, [
+      h("span", { class: "tag", text: "第" + c.no + "章" }),
+      h("span", { class: "tag plain", text: "約" + c.minutes + "分" }),
+      isDone ? h("span", { class: "badge ok", text: "読了" }) : null
+    ]));
+    card.appendChild(h("h2", { class: "tb-title", text: c.title }));
+    card.appendChild(h("div", { class: "tb-goal" }, [h("strong", { text: "この章でわかること" }), h("ul", null, c.goal.map(function (g) { return h("li", { text: g }); }))]));
+    var body = h("div", { class: "tb-body" });
+    c.sections.forEach(function (sec) {
+      resetAnn();
+      body.appendChild(h("h3", { class: "tb-h", text: sec.h }));
+      sec.blocks.forEach(function (b) { body.appendChild(tbBlock(b)); });
+    });
+    card.appendChild(body);
+    card.appendChild(h("div", { class: "tb-recap" }, [h("strong", { text: "ここだけ覚える" }), h("ol", null, c.recap.map(function (t) { return h("li", { text: t }); }))]));
+    box.appendChild(card);
+    var foot = h("div", { class: "card tb-foot" });
+    foot.appendChild(h("p", { class: "small", style: "margin:0 0 8px" }, ["公式で読む：" + c.official.label + "　", h("a", { href: c.official.url, target: "_blank", rel: "noopener", text: "講座を開く（要ログイン）" })]));
+    var msg = h("span", { class: "small" });
+    var row = h("div", { class: "row", style: "margin-top:6px" });
+    if (!isDone) row.appendChild(h("button", { class: "primary", text: i < TB.length - 1 ? "読了にして、次の章へ" : "読了にする", onclick: function () { setRead(c.id, true); if (i < TB.length - 1) openChapter(TB[i + 1].id); else { bookCur = null; go("book"); window.scrollTo(0, 0); } } }));
+    else row.appendChild(h("button", { class: "ghost", text: "読了を取り消す", onclick: function () { setRead(c.id, false); go("book"); } }));
+    row.appendChild(h("button", { class: "ghost", text: "この分野の問題を10問解く", onclick: function () {
+      launch({ dom: c.domain, scope: "all", mode: normMode(load(K_PREFS, {}).mode), sq: true, so: true, n: 10, axes: loadAxes() });
+    } }));
+    foot.appendChild(row);
+    var ask = tbAskText(c);
+    foot.appendChild(h("div", { class: "airow" }, [
+      h("button", { class: "ghost", text: "この章をAIに聞き直す（Claudeを開く）", onclick: function () {
+        copyText(ask, msg, "質問文をコピーしました。開いた画面の入力欄が空なら、貼り付けてください。");
+        window.open("https://claude.ai/new?q=" + encodeURIComponent(ask), "_blank", "noopener");
+      } }), msg
+    ]));
+    box.appendChild(foot);
+    box.appendChild(nav());
+    return box;
+  }
+  function viewBook() {
+    if (bookCur) { var i = tbIndex(bookCur); if (i >= 0) return viewChapter(i); bookCur = null; }
+    return viewBookToc();
+  }
+
   /* ---------- 画面の枠（タブ） ---------- */
   var TABS = [
     { id: "solve", label: "解く" },
@@ -931,6 +1076,7 @@
     { id: "xfer", label: "記録の共有" }
   ];
   if (GLOSS.length) TABS.splice(4, 0, { id: "gloss", label: "用語集" });
+  if (TB.length) TABS.unshift({ id: "book", label: "教科書" });
   function shell(active, content) {
     clear();
     app.appendChild(h("h1", { text: CFG.title || "練習問題" }));
@@ -946,7 +1092,7 @@
   }
   function go(t) {
     tab = t;
-    var c = t === "solve" ? viewSolve() : t === "browse" ? viewBrowse() : t === "history" ? viewHistory() : t === "xfer" ? viewXfer() : t === "gloss" ? viewGloss() : viewStats();
+    var c = t === "solve" ? viewSolve() : t === "browse" ? viewBrowse() : t === "history" ? viewHistory() : t === "xfer" ? viewXfer() : t === "gloss" ? viewGloss() : t === "book" ? viewBook() : viewStats();
     shell(t, c);
   }
 
@@ -1841,7 +1987,9 @@
     shell("stats", content);
   }
 
-  go("solve");
+  // 初めて開いた人（記録も、途中の回もない）は、教科書から。ふだんの人は、これまでどおり「解く」から
+  var firstVisit = !Object.keys(load(K_QSTAT, {})).length && !load(K_RUN, null);
+  go(TB.length && firstVisit ? "book" : "solve");
   syncSoon(300);   // 開いたときに、サーバーの記録を、取り込む
   document.addEventListener("visibilitychange", function () { if (!document.hidden) syncSoon(500); });   // 別の端末から戻ったときにも
 })();
