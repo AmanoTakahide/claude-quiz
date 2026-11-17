@@ -148,7 +148,7 @@
   .airow { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   details.more.card > summary { font-weight: 700; }
   /* 教科書（読み物） */
-  .tb-lead { margin: 4px 0 10px; }
+  .tb-lead { margin: 4px 0 10px; font-size: .92rem; }
   .tb-prog { margin: 8px 0 4px; }
   .tb-group { margin: 18px 0 6px; font-size: .88rem; font-weight: 700; color: var(--muted); }
   .tb-chap { display: flex; gap: 12px; align-items: center; padding: 12px 12px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; background: var(--card); cursor: pointer; }
@@ -156,14 +156,14 @@
   .tb-no { flex: 0 0 auto; min-width: 2.9em; text-align: center; font-weight: 700; color: var(--accent); background: var(--accent-weak); border-radius: 8px; padding: 4px 6px; font-size: .9rem; }
   .tb-chap.done .tb-no { background: var(--ok-bg); color: var(--ok); }
   .tb-ct { flex: 1 1 auto; min-width: 0; }
-  .tb-ct strong { display: block; line-height: 1.5; }
+  .tb-ct strong { font-size: .95rem; display: block; line-height: 1.5; }
   .tb-ct span { display: block; font-size: .82rem; color: var(--muted); line-height: 1.6; }
-  .tb-title { font-size: 1.25rem; line-height: 1.5; margin: 6px 0 10px; }
-  .tb-goal { background: var(--accent-weak); border-radius: 10px; padding: 12px 16px; margin: 10px 0 6px; }
+  .tb-title { font-size: 1.12rem; line-height: 1.5; margin: 6px 0 10px; }
+  .tb-goal { font-size: .9rem; background: var(--accent-weak); border-radius: 10px; padding: 12px 16px; margin: 10px 0 6px; }
   .tb-goal strong { color: var(--accent); }
   .tb-goal ul { margin: 6px 0 0; padding-left: 1.3em; }
-  .tb-body { font-size: 1.02rem; line-height: 2; }
-  .tb-h { font-size: 1.1rem; margin: 30px 0 8px; padding-bottom: 4px; border-bottom: 2px solid var(--accent); line-height: 1.5; }
+  .tb-body { font-size: .93rem; line-height: 1.95; }
+  .tb-h { font-size: 1rem; margin: 30px 0 8px; padding-bottom: 4px; border-bottom: 2px solid var(--accent); line-height: 1.5; }
   .tb-p { margin: 10px 0; }
   .tb-ul { margin: 10px 0; padding-left: 1.3em; }
   .tb-ul li { margin: 6px 0; }
@@ -180,12 +180,24 @@
   .tb-flow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 14px 0; }
   .tb-flow .fb { border: 1px solid var(--accent); background: var(--card); padding: 6px 12px; border-radius: 8px; font-size: .92rem; line-height: 1.6; }
   .tb-flow .fa { color: var(--accent); font-weight: 700; }
-  .tb-recap { margin: 26px 0 8px; padding: 12px 16px; border-radius: 10px; background: var(--ok-bg); }
+  .tb-recap { font-size: .9rem; margin: 26px 0 8px; padding: 12px 16px; border-radius: 10px; background: var(--ok-bg); }
   .tb-recap strong { color: var(--ok); }
   .tb-recap ol { margin: 6px 0 0; padding-left: 1.4em; }
   .tb-foot { margin-top: 18px; }
   .tb-nav { display: flex; gap: 8px; justify-content: space-between; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
-  @media (max-width: 560px) { .tb-body { font-size: 1rem; } .tb-nav button { padding: 8px 12px; } }
+  @media (max-width: 560px) {
+    .tb-body { font-size: .83rem; line-height: 1.9; }
+    .tb-title { font-size: 1rem; }
+    .tb-h { font-size: .9rem; }
+    .tb-goal, .tb-recap { font-size: .8rem; }
+    .tb-lead { font-size: .82rem; }
+    .tb-ct strong { font-size: .86rem; }
+    .tb-ct span { font-size: .76rem; }
+    .tb-ex pre { font-size: .76rem; }
+    .tb-bt { font-size: .74rem; }
+    .tb-flow .fb { font-size: .8rem; }
+    .tb-nav button { padding: 8px 12px; }
+  }
 </style>
 </head>
 <body>
