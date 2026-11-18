@@ -198,6 +198,56 @@
     .tb-flow .fb { font-size: .8rem; }
     .tb-nav button { padding: 8px 12px; }
   }
+
+  /* ---------- 広い画面（PC）向け：横に広げる ---------- */
+  .tb-layout { display: block; }
+  .tb-side { display: none; }
+  .tb-sg { margin: 12px 0 4px; font-size: .74rem; font-weight: 700; color: var(--muted); line-height: 1.5; }
+  .tb-sg:first-child { margin-top: 0; }
+  .tb-si { display: flex; gap: 8px; align-items: baseline; padding: 5px 8px; border-radius: 8px; font-size: .84rem; line-height: 1.5; cursor: pointer; border: 1px solid transparent; }
+  .tb-si:hover { background: var(--accent-weak); }
+  .tb-si.cur { background: var(--accent); color: #fff; }
+  .tb-si .sn { flex: 0 0 auto; min-width: 2.6em; font-weight: 700; color: var(--accent); }
+  .tb-si.cur .sn { color: #fff; }
+  .tb-si.done .sn { color: var(--ok); }
+  .tb-si.cur.done .sn { color: #fff; }
+  .tb-si .st { flex: 1 1 auto; min-width: 0; }
+  @media (min-width: 1000px) {
+    #tbtoc { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+    #tbtoc > .card, #tbtoc > .tb-group, #tbtoc > p { grid-column: 1 / -1; }
+  }
+  @media (min-width: 1100px) {
+    main { max-width: 1200px; }
+    main.wide { max-width: 1560px; }
+    .tb-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }
+    .tb-side { display: block; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; padding: 10px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+    .tb-layout > .tb-mainc { max-width: 1180px; }
+  }
+  @media (min-width: 1400px) {
+    .tb-body { font-size: 1.02rem; }
+    .tb-title { font-size: 1.25rem; }
+    .tb-h { font-size: 1.1rem; }
+    .tb-goal, .tb-recap { font-size: .98rem; }
+    .tb-box { font-size: 1rem; }
+    .tb-ex pre { font-size: .94rem; }
+    .tb-flow .fb { font-size: 1rem; }
+  }
+  @media (min-width: 1900px) {
+    main.wide { max-width: 1840px; }
+    main { max-width: 1400px; }
+    .tb-layout { grid-template-columns: 340px minmax(0, 1fr); gap: 28px; }
+    .tb-layout > .tb-mainc { max-width: 1440px; }
+    .tb-si { font-size: .92rem; }
+    .tb-body { font-size: 1.1rem; }
+    .tb-title { font-size: 1.4rem; }
+    .tb-h { font-size: 1.2rem; }
+    .tb-goal, .tb-recap { font-size: 1.04rem; }
+    .tb-box { font-size: 1.08rem; }
+    .tb-ex pre { font-size: 1rem; }
+    .tb-flow .fb { font-size: 1.08rem; }
+    .tb-ct strong { font-size: 1.02rem; }
+    .tb-ct span { font-size: .9rem; }
+  }
 </style>
 </head>
 <body>
@@ -1004,7 +1054,7 @@
     return ["Claude の認定資格の勉強で、教科書の「" + c.title + "」を読みました。", "初心者にも分かるように、たとえ話を使って、この章の要点をもう一度、やさしく説明してください。わからない用語があれば、先に意味を教えてください。", "", "この章でわかるはずのこと:"].concat(c.goal.map(function (g) { return "・" + g; })).join("\n");
   }
   function viewBookToc() {
-    var box = h("div"), card = h("div", { class: "card" });
+    var box = h("div", { id: "tbtoc" }), card = h("div", { class: "card" });
     var rd = readMap(), done = TB.filter(function (c) { return rd[c.id]; }).length;
     card.appendChild(h("h2", { text: "教科書（入門の読み物）" }));
     card.appendChild(h("p", { class: "tb-lead", text: "公式の講座を、はじめての人向けに、やさしく書き直した読み物です。1章 約6〜8分。まずは浅く、全体を1周するための資料で、これだけで合格をねらうものではありません。わからない言葉は、点線の下線をタップすると意味が出ます。" }));
@@ -1072,7 +1122,17 @@
     ]));
     box.appendChild(foot);
     box.appendChild(nav());
-    return box;
+    box.className = "tb-mainc";
+    var side = h("aside", { class: "tb-side" });
+    var lastG = null;
+    TB.forEach(function (x) {
+      if (x.group !== lastG) { side.appendChild(h("div", { class: "tb-sg", text: x.group })); lastG = x.group; }
+      side.appendChild(h("div", { class: "tb-si" + (x.id === c.id ? " cur" : "") + (rd[x.id] ? " done" : ""), role: "button", tabindex: "0", onclick: function () { openChapter(x.id); } }, [
+        h("span", { class: "sn", text: (rd[x.id] ? "✓" : "") + x.no }),
+        h("span", { class: "st", text: x.title.replace(/^【[^】]*】/, "") })
+      ]));
+    });
+    return h("div", { class: "tb-layout" }, [side, box]);
   }
   function viewBook() {
     if (bookCur) { var i = tbIndex(bookCur); if (i >= 0) return viewChapter(i); bookCur = null; }
@@ -1091,6 +1151,7 @@
   if (TB.length) TABS.unshift({ id: "book", label: "教科書" });
   function shell(active, content) {
     clear();
+    app.className = (active === "book" && bookCur) ? "wide" : "";
     app.appendChild(h("h1", { text: CFG.title || "練習問題" }));
     app.appendChild(h("div", { class: "sub", text: CFG.subtitle || "" }));
     if (!storageOK) app.appendChild(h("div", { class: "banner", text: "このブラウザでは結果を保存できません（プライベートモードや、保存の制限が原因のことがあります）。履歴は残りません。" }));
