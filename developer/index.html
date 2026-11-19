@@ -9,13 +9,13 @@
   :root {
     --bg: #faf8f5; --card: #ffffff; --text: #2b2a28; --muted: #6b6760;
     --line: #e3ded6; --accent: #c4623f; --accent-weak: #f6e3db;
-    --ok: #2f7d4f; --ok-bg: #e2f1e8; --ng: #b3392e; --ng-bg: #f9e1de; --warn: #a86b00;
+    --ok: #2f7d4f; --ok-bg: #e2f1e8; --ng: #b3392e; --ng-bg: #f9e1de; --warn: #a86b00; --okx: #bfe6cd; --ngx: #f6c4bf;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #1d1c1a; --card: #272624; --text: #ece8e1; --muted: #a39e94;
       --line: #3a3835; --accent: #e08462; --accent-weak: #3b2a24;
-      --ok: #7cc79a; --ok-bg: #213529; --ng: #f08a80; --ng-bg: #3a2422; --warn: #e0b04a;
+      --ok: #7cc79a; --ok-bg: #213529; --ng: #f08a80; --ng-bg: #3a2422; --warn: #e0b04a; --okx: #25573a; --ngx: #6a2c27;
     }
   }
   * { box-sizing: border-box; }
@@ -92,6 +92,51 @@
   button.conf0 { background: color-mix(in srgb, var(--accent) 25%, var(--card)); color: var(--text); }
   .confrow button:disabled { opacity: .6; }
   .verdict.ok { color: var(--ok); } .verdict.ng { color: var(--ng); }
+  /* ---------- 記号（A〜D）・正解の強調・選択肢ごとの理由・番号・目次 ---------- */
+  .letter { flex: 0 0 auto; width: 1.8em; height: 1.8em; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: .85rem; background: var(--accent-weak); color: var(--accent); margin-top: 1px; }
+  .otext { flex: 1 1 auto; min-width: 0; }
+  label.opt.correct, .optrow.correct { background: var(--okx); border: 2px solid var(--ok); padding: 9px 11px; }
+  label.opt.wrong, .optrow.wrong { background: var(--ngx); border: 2px solid var(--ng); padding: 9px 11px; }
+  label.opt.correct .letter, .optrow.correct .letter { background: var(--ok); color: #fff; }
+  label.opt.wrong .letter, .optrow.wrong .letter { background: var(--ng); color: #fff; }
+  label.opt.dim, .optrow.dim { opacity: .62; }
+  .pill { flex: 0 0 auto; font-size: .78rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; color: #fff; white-space: nowrap; align-self: center; margin-left: auto; }
+  .pill.ok { background: var(--ok); }
+  .pill.ng { background: var(--ng); }
+  .why { margin: -4px 0 10px; padding: 8px 12px 8px 14px; border-left: 4px solid var(--line); border-radius: 0 8px 8px 0; background: var(--bg); font-size: .9rem; line-height: 1.8; }
+  .why.ok { border-left-color: var(--ok); background: var(--ok-bg); }
+  .why.ng { border-left-color: var(--ng); background: var(--ng-bg); }
+  .why .wt { font-weight: 700; margin-right: .5em; }
+  .why.ok .wt { color: var(--ok); }
+  .why.ng .wt { color: var(--ng); }
+  .card.res-ok { border: 2px solid var(--ok); background: color-mix(in srgb, var(--ok-bg) 35%, var(--card)); }
+  .card.res-ng { border: 2px solid var(--ng); background: color-mix(in srgb, var(--ng-bg) 35%, var(--card)); }
+  .vbar { font-size: 1.1rem; font-weight: 700; padding: 8px 14px; border-radius: 10px; margin: 0 0 12px; color: #fff; }
+  .vbar.ok { background: var(--ok); }
+  .vbar.ng { background: var(--ng); }
+  .qno { font-weight: 700; background: var(--accent); color: #fff; padding: 2px 10px; border-radius: 999px; }
+  .qread { margin-left: auto; }
+  .card[id^="q-"] { scroll-margin-top: 8px; }
+  .qlayout { display: block; }
+  .qside { display: none; }
+  .qgrid { display: flex; flex-wrap: wrap; gap: 4px; }
+  .qc { min-width: 2.6em; padding: 3px 4px; text-align: center; font-size: .74rem; line-height: 1.5; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--text); cursor: pointer; font-variant-numeric: tabular-nums; }
+  .qc.read { background: var(--accent-weak); border-color: var(--accent); }
+  .qc.ok { background: var(--okx); border-color: var(--ok); }
+  .qc.ng { background: var(--ngx); border-color: var(--ng); }
+  .qc.off { opacity: .3; }
+  .qc.cur { outline: 3px solid var(--text); outline-offset: 1px; font-weight: 700; }
+  .qleg { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .74rem; color: var(--muted); margin: 6px 0 8px; }
+  .qleg i { display: inline-block; width: .9em; height: .9em; border: 1px solid var(--line); border-radius: 3px; vertical-align: -1px; margin-right: 4px; background: var(--card); }
+  .qleg i.read { background: var(--accent-weak); border-color: var(--accent); }
+  .qleg i.ok { background: var(--okx); border-color: var(--ok); }
+  .qleg i.ng { background: var(--ngx); border-color: var(--ng); }
+  .qtoc .qsum { font-size: .9rem; font-weight: 700; margin: 0 0 4px; }
+  @media (min-width: 1100px) {
+    .qlayout { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 20px; align-items: start; }
+    .qside { display: block; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+    .qtop { display: none; }
+  }
   table { width: 100%; border-collapse: collapse; font-size: .92rem; }
   th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
   td.num, th.num { text-align: right; white-space: nowrap; }
@@ -266,6 +311,8 @@
     set.questions.forEach(function (q) { q._set = set.title; q._setId = set.id; QMAP[q.id] = q; ALLQ.push(q); });
   });
   ALLQ.forEach(function (q) { if (DOMAINS.indexOf(q.domain) < 0) DOMAINS.push(q.domain); });
+  ALLQ.forEach(function (q, i) { q._no = i + 1; });   // 通し番号（No.）。データの並び順
+  var LET = "ABCDEFGH";   // 選択肢の記号
 
   // 設定（config.json の内容）。タイトル、保存キーの接頭辞、分野と配点
   var CFG = window.QUIZ_CONFIG || {};
@@ -286,6 +333,7 @@
   var K_PREFS = PREFIX + "Prefs";
   var K_TIMER = PREFIX + "Timer";
   var K_BACKUP = PREFIX + "Backup";
+  var K_QREAD = PREFIX + "QRead";   // 問題一覧の「既読」（この端末のみ。同期はしません）
   var storageOK = true;
   function load(key, def) {
     try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch (e) { storageOK = false; return def; }
@@ -312,7 +360,8 @@
     });
     return el;
   }
-  function clear() { stopTick(); while (app.firstChild) app.removeChild(app.firstChild); }
+  var qScroll = null;
+  function clear() { stopTick(); if (qScroll) { window.removeEventListener("scroll", qScroll); qScroll = null; } while (app.firstChild) app.removeChild(app.firstChild); }
   function shuffle(a) {
     a = a.slice();
     for (var i = a.length - 1; i > 0; i--) {
@@ -329,6 +378,22 @@
   function optById(q, id) { return q.options.filter(function (o) { return o.id === id; })[0]; }
   function optLines(q, ids) {
     return ids.map(function (id) { var o = optById(q, id); return "・" + (o ? o.t : id); }).join("\n");
+  }
+  function qreadMap() { return load(K_QREAD, {}); }
+  function isQRead(id) { return !!qreadMap()[id]; }
+  function setQRead(id, v) { var m = qreadMap(); if (v) m[id] = 1; else delete m[id]; m._last = id; save(K_QREAD, m); }
+  function autoRead(id) { var m = qreadMap(); m[id] = 1; m._last = id; save(K_QREAD, m); }
+  function letterEl(i) { return h("span", { class: "letter", text: LET.charAt(i) }); }
+  function qnoTag(q) { return h("span", { class: "qno", text: "No." + q._no }); }
+  // 選択肢ごとの理由（正解の理由／間違いの理由）の箱。理由が無いときは null
+  function whyBox(q, id, isAns) {
+    var t = q.ox && q.ox[id];
+    if (!t) return null;
+    return h("div", { class: "why " + (isAns ? "ok" : "ng") }, [h("span", { class: "wt", text: isAns ? "○ 正解の理由" : "× 間違いの理由" })].concat(annotate(t)));
+  }
+  function answerLetters(q, ord) {
+    var ids = ord || q.options.map(function (o) { return o.id; });
+    return q.answer.map(function (id) { return LET.charAt(ids.indexOf(id)); }).sort().join("・");
   }
   function basicsBlock(q) {
     return h("div", { class: "basics" }, [
@@ -452,7 +517,7 @@
     if (d.bg && d.bg.length) sec("背景（用語と前提）", h("div", null, d.bg.map(function (x) { return h("p", { class: "dp" }, [h("strong", { text: x.t + "：" })].concat(annotate(x.d))); })));
     if (d.meaning) sec("問題の意味", para(d.meaning));
     if (d.answer) sec("正解の意味", para(d.answer));
-    if (d.others && d.others.length) sec("ほかの選択肢が違う理由", h("ul", { class: "dul" }, d.others.map(function (x) { return h("li", null, [h("strong", { text: x.t }), "　→　"].concat(annotate(x.d))); })));
+    if (d.others && d.others.length && !q.ox) sec("ほかの選択肢が違う理由", h("ul", { class: "dul" }, d.others.map(function (x) { return h("li", null, [h("strong", { text: x.t }), "　→　"].concat(annotate(x.d))); })));
     if (d.analogy) sec("たとえるなら", para(d.analogy));
     if (d.use && d.use.length) sec("実務での使いどころ", bullets(d.use));
     if (d.memo && d.memo.length) sec("覚えておくこと", bullets(d.memo));
@@ -474,17 +539,18 @@
       else fail();
     } catch (e) { fail(); }
   }
-  function buildAskText(q, sel, ok, unk) {
-    var name = function (id) { var o = optById(q, id); return o ? o.t : id; };
+  function buildAskText(q, sel, ok, unk, ord) {
+    var ids = ord || q.options.map(function (o) { return o.id; });
+    var name = function (id) { var o = optById(q, id); return LET.charAt(ids.indexOf(id)) + "（" + (o ? o.t : id) + "）"; };
     var lines = ["Claude の認定資格の練習問題で、わからない点があります。初心者にも分かるように、背景から丁寧に教えてください。", "", "【問題】" + q.q, "【選択肢】"];
-    q.options.forEach(function (o) { lines.push("・" + o.t); });
+    ids.forEach(function (id, i) { lines.push("・" + LET.charAt(i) + ". " + optById(q, id).t); });
     lines.push("【正解】" + q.answer.map(name).join(" ／ "));
     lines.push("【私の回答】" + (unk ? "わからなかった" : sel.map(name).join(" ／ ") + (ok ? "（正解）" : "（不正解）")));
     lines.push("", "知りたいこと: なぜその答えになるのか。ほかの選択肢はなぜ違うのか。実務ではどんな場面で使うのか。出てくる専門用語の意味。");
     return lines.join("\n");
   }
-  function aiBlock(q, sel, ok, unk) {
-    var full = buildAskText(q, sel, ok, unk);
+  function aiBlock(q, sel, ok, unk, ord) {
+    var full = buildAskText(q, sel, ok, unk, ord);
     var short = full.length > 700 ? full.slice(0, 700) + "…" : full;
     var msg = h("span", { class: "small" });
     return h("div", { class: "airow" }, [
@@ -639,7 +705,7 @@
     var ans = r.results.length;
     if (ans) card.appendChild(h("p", { class: "small", text: "1問あたりの平均: 回答 " + fmtSec(sm.a / ans) + "（目標 " + fmtSec(T.ans) + "）、解説 " + fmtSec(sm.r / ans) + "（目標 " + fmtSec(T.rev) + "）" + (finished ? "" : "。中断した回は、回答した " + ans + " 問分の目標と比べています。") }));
     var slow = r.results.filter(function (x) { return x.ta != null; }).sort(function (a, b) { return b.ta - a.ta; }).slice(0, 3);
-    if (slow.length) card.appendChild(h("p", { class: "small", text: "回答に時間がかかった問題: " + slow.map(function (x) { return x.qid + "（" + fmtSec(x.ta) + "）"; }).join("、") }));
+    if (slow.length) card.appendChild(h("p", { class: "small", text: "回答に時間がかかった問題: " + slow.map(function (x) { return (QMAP[x.qid] ? "No." + QMAP[x.qid]._no : x.qid) + "（" + fmtSec(x.ta) + "）"; }).join("、") }));
     return card;
   }
 
@@ -1174,33 +1240,61 @@
   function questionBlock(q, o) {
     o = o || {};
     resetAnn();
-    var card = h("div", { class: "card" });
+    var card = h("div", { class: "card", id: "q-" + q.id });
     var tags = h("div", { class: "tags" }, [
+      qnoTag(q),
       h("span", { class: "tag", text: q.domain }),
       h("span", { class: "tag plain", text: q.id })
     ]);
     if (o.stat !== undefined) tags.appendChild(statBadge(o.stat));
     if (o.sel) tags.appendChild(h("span", { class: "badge " + (o.ok ? "ok" : "ng"), text: o.ok ? "この回: 正解" : "この回: 不正解" }));
+    var rdState = o.read === true, rdBtn = null;
+    function rdText() { return rdState ? "既読（未読に戻す）" : "未読（既読にする）"; }
+    if (typeof o.read === "boolean") {
+      rdBtn = h("button", { class: "ghost small qread", text: rdText(), onclick: function () {
+        rdState = !rdState; setQRead(q.id, rdState); rdBtn.textContent = rdText();
+        if (o.onRead) o.onRead(q, rdState);
+      } });
+      tags.appendChild(rdBtn);
+    }
     card.appendChild(tags);
     card.appendChild(h("p", { class: "qtext" }, annotate(q.q)));
     if (q.type === "multi") card.appendChild(h("p", { class: "hint", text: "※ " + q.pick + "つ選ぶ問題" }));
-    q.options.forEach(function (op) {
-      var cls = "optrow";
-      var label = "";
-      if (o.sel) {
-        var isAns = q.answer.indexOf(op.id) >= 0, isSel = o.sel.indexOf(op.id) >= 0;
-        if (isAns) { cls += " correct"; label = isSel ? "　← 正解（あなたも選択）" : "　← 正解"; }
-        else if (isSel) { cls += " wrong"; label = "　← あなたの選択（不正解）"; }
-      }
-      card.appendChild(h("div", { class: cls, text: op.t + label }));
+    var rows = [];
+    q.options.forEach(function (op, i) {
+      var row = h("div", { class: "optrow" }, [letterEl(i), h("span", { class: "otext", text: op.t })]);
+      rows.push({ row: row, op: op });
+      card.appendChild(row);
     });
+    var shown = false;
+    // 正解の色づけと、選択肢ごとの理由を出す（答えを見せるとき）
+    function mark() {
+      if (shown) return;
+      shown = true;
+      rows.forEach(function (r) {
+        var isAns = q.answer.indexOf(r.op.id) >= 0, isSel = !!o.sel && o.sel.indexOf(r.op.id) >= 0;
+        if (isAns) { r.row.classList.add("correct"); r.row.appendChild(h("span", { class: "pill ok", text: isSel ? "✔ 正解（あなたの回答）" : "✔ 正解" })); }
+        else if (isSel) { r.row.classList.add("wrong"); r.row.appendChild(h("span", { class: "pill ng", text: "✖ あなたの回答" })); }
+        else r.row.classList.add("dim");
+        var w = whyBox(q, r.op.id, isAns);
+        if (w) r.row.parentNode.insertBefore(w, r.row.nextSibling);
+      });
+    }
+    if (o.sel) mark();
     var body = h("div", null, [
-      h("p", { class: "small", style: "white-space:pre-wrap;margin:8px 0 0", text: "正解:\n" + optLines(q, q.answer) }),
+      h("p", { class: "small", style: "white-space:pre-wrap;margin:8px 0 0", text: "正解: " + answerLetters(q) + "\n" + q.answer.map(function (id) { return "・" + LET.charAt(q.options.indexOf(optById(q, id))) + ". " + optById(q, id).t; }).join("\n") }),
       explainBlock(q),
       (q.deep || q.basics) ? deepBlock(q) : null
     ]);
-    var det = h("details", { class: "more" }, [h("summary", { text: "答えと解説を見る" }), body]);
-    if (o.open) det.open = true;
+    var sum = h("summary", { text: "答えと解説を見る", onclick: function () {
+      if (!det.open) {
+        mark(); autoRead(q.id); rdState = true;
+        if (rdBtn) rdBtn.textContent = rdText();
+        if (o.onRead) o.onRead(q, true);
+      }
+    } });
+    var det = h("details", { class: "more" }, [sum, body]);
+    if (o.open) { det.open = true; mark(); }
     card.appendChild(det);
     return card;
   }
@@ -1734,6 +1828,7 @@
 
     var card = h("div", { class: "card" });
     var tg = h("div", { class: "tags" }, [
+      qnoTag(q),
       h("span", { class: "tag", text: q.domain }),
       h("span", { class: "tag plain", text: q.id })
     ]);
@@ -1743,9 +1838,9 @@
     if (isMulti) card.appendChild(h("p", { class: "hint", text: "※ " + need + "つ選んでください。" }));
 
     var inputs = [];
-    opts.forEach(function (o) {
+    opts.forEach(function (o, oi) {
       var input = h("input", { type: isMulti ? "checkbox" : "radio", name: "opt", value: o.id });
-      var label = h("label", { class: "opt" }, [input, h("span", { text: o.t })]);
+      var label = h("label", { class: "opt" }, [input, letterEl(oi), h("span", { class: "otext", text: o.t })]);
       input.addEventListener("change", update);
       label.addEventListener("click", function () { if (ui) ui.resume(); });   // 選択肢を押したら、一時停止を解除
       inputs.push({ input: input, label: label, o: o });
@@ -1784,18 +1879,24 @@
       recordAnswer(q.id, ok, conf, unk);
       save(K_RUN, run);
       upsertHistory(run, run.results.length >= run.order.length ? "complete" : "interrupted");
+      autoRead(q.id);
       inputs.forEach(function (x) {
         x.input.disabled = true; x.label.classList.add("locked");
         var isAns = ans.indexOf(x.o.id) >= 0, isSel = sel.indexOf(x.o.id) >= 0;
-        if (isAns) { x.label.classList.add("correct"); x.label.appendChild(h("span", { class: "mark ok", text: "正解" })); }
-        else if (isSel) { x.label.classList.add("wrong"); x.label.appendChild(h("span", { class: "mark ng", text: "不正解" })); }
+        if (isAns) { x.label.classList.add("correct"); x.label.appendChild(h("span", { class: "pill ok", text: isSel ? "✔ 正解（あなたの回答）" : "✔ 正解" })); }
+        else if (isSel) { x.label.classList.add("wrong"); x.label.appendChild(h("span", { class: "pill ng", text: "✖ あなたの回答" })); }
+        else x.label.classList.add("dim");
+        var w = whyBox(q, x.o.id, isAns);
+        if (w) x.label.parentNode.insertBefore(w, x.label.nextSibling);
       });
-      feedback.appendChild(h("p", { class: "verdict " + (ok ? "ok" : "ng"), text: unk ? "わからない（不正解として記録します）" : ok ? "正解です" : "不正解です" }));
+      var shownOrder = run.optOrder[q.id];
+      card.classList.add(ok ? "res-ok" : "res-ng");
+      card.insertBefore(h("div", { class: "vbar " + (ok ? "ok" : "ng"), text: unk ? "わからない（不正解として記録します）。正解は " + answerLetters(q, shownOrder) : ok ? "✔ 正解です（" + answerLetters(q, shownOrder) + "）" : "✖ 不正解です。正解は " + answerLetters(q, shownOrder) }), card.firstChild);
       if (ok && conf != null && conf <= 1) feedback.appendChild(h("p", { class: "hint", text: "正解ですが、自信が低かったので、まぐれの可能性があります。復習の候補に入れておきます。" }));
       if (!ok && !unk && conf === 2) feedback.appendChild(h("p", { class: "hint", text: "自信ありで不正解でした。思い込みの可能性があるので、解説をよく読んで、優先して復習します。" }));
       feedback.appendChild(explainBlock(q));
       if (q.deep || q.basics) feedback.appendChild(deepBlock(q));
-      feedback.appendChild(aiBlock(q, sel, ok, unk));
+      feedback.appendChild(aiBlock(q, sel, ok, unk, run.optOrder[q.id]));
       submit.style.display = "none";
       next.style.display = "";
       if (ui) ui.update();
@@ -1887,43 +1988,142 @@
     var selDomain = h("select", { onchange: refresh }, [opt("", "分野: すべて")].concat(DOMAINS.map(function (d) { return opt(d, domLabel(d)); })));
     selDomain.value = bf.domain;
     var selStatus = h("select", { onchange: refresh }, [
-      opt("", "状態: すべて"), opt("none", "未回答"), opt("ok", "前回 正解"), opt("ng", "前回 不正解"), opt("ever", "過去に1度でも不正解")
+      opt("", "状態: すべて"), opt("unread", "未読"), opt("read", "既読"), opt("none", "未回答"), opt("ok", "前回 正解"), opt("ng", "前回 不正解"), opt("ever", "過去に1度でも不正解")
     ]);
     selStatus.value = bf.status;
     var kw = h("input", { type: "text", placeholder: "キーワードで探す", oninput: refresh });
     kw.value = bf.kw;
     var openAll = h("input", { type: "checkbox", onchange: refresh });
     openAll.checked = bf.open;
-    box.appendChild(h("div", { class: "controls" }, [
-      selDomain, selStatus, kw, h("label", { class: "check" }, [openAll, h("span", { text: "答えと解説をすべて開く" })])
-    ]));
     var count = h("div", { class: "small", style: "margin-bottom:8px" });
     var list = h("div");
-    box.appendChild(count);
-    box.appendChild(list);
+    var shownIds = {}, cur = null, cells = [], sums = [], bars = [], msgs = [];
+
+    // ---- 目次（番号のマス。色＝未読／既読／前回正解／前回不正解。枠＝いま見ている位置） ----
+    function paint() {
+      var rm = qreadMap(), nRead = 0;
+      cells.forEach(function (c) {
+        var id = c.q.id, s = stats[id], cls = "qc";
+        if (rm[id]) nRead++;
+        if (s && s.last === false) cls += " ng";
+        else if (s && s.last === true) cls += " ok";
+        else if (rm[id]) cls += " read";
+        if (!shownIds[id]) cls += " off";
+        if (id === cur) cls += " cur";
+        c.el.className = cls;
+      });
+      nRead = ALLQ.filter(function (q) { return rm[q.id]; }).length;
+      sums.forEach(function (e) { e.textContent = "既読 " + nRead + " / " + ALLQ.length + " 問（" + pct(nRead, ALLQ.length) + "%）"; });
+      bars.forEach(function (e) { e.style.width = pct(nRead, ALLQ.length) + "%"; });
+    }
+    function setCur(id, quiet) {
+      if (cur === id) return;
+      cur = id;
+      var m = qreadMap(); m._last = id; save(K_QREAD, m);
+      paint();
+    }
+    function jump(id) {
+      if (!document.getElementById("q-" + id)) {   // 絞り込みで隠れているときは、絞り込みを外す
+        bf.domain = ""; bf.status = ""; bf.kw = "";
+        selDomain.value = ""; selStatus.value = ""; kw.value = "";
+        refresh();
+      }
+      var el = document.getElementById("q-" + id);
+      topDet.open = false;
+      if (el) { el.scrollIntoView({ block: "start" }); setCur(id); }
+    }
+    function nextUnread() {
+      var rm = qreadMap(), from = cur ? QMAP[cur]._no : 0;
+      var pick = null, i;
+      for (i = from; i < ALLQ.length && !pick; i++) if (!rm[ALLQ[i].id] && shownIds[ALLQ[i].id]) pick = ALLQ[i];
+      for (i = 0; i < from && !pick; i++) if (!rm[ALLQ[i].id] && shownIds[ALLQ[i].id]) pick = ALLQ[i];
+      msgs.forEach(function (e) { e.textContent = pick ? "" : "表示中の問題は、すべて既読です。"; });
+      if (pick) jump(pick.id);
+    }
+    function lastPos() {
+      var id = qreadMap()._last;
+      if (id && QMAP[id]) jump(id);
+      else msgs.forEach(function (e) { e.textContent = "まだ、前回の位置の記録がありません。"; });
+    }
+    function tocBody() {
+      var sum = h("div", { class: "qsum" }), bar = h("div", { style: "width:0" }), msg = h("span", { class: "small" });
+      sums.push(sum); bars.push(bar); msgs.push(msg);
+      var g = h("div", { class: "qgrid" });
+      ALLQ.forEach(function (q) {
+        var el = h("button", { type: "button", class: "qc", text: String(q._no), title: "No." + q._no + " " + q.q.slice(0, 40), onclick: function () { jump(q.id); } });
+        cells.push({ el: el, q: q });
+        g.appendChild(el);
+      });
+      return h("div", { class: "qtoc" }, [
+        sum,
+        h("div", { class: "bar", style: "margin-bottom:8px" }, [bar]),
+        h("div", { class: "row", style: "margin:0 0 4px" }, [
+          h("button", { class: "ghost small", text: "つづきから（前回の位置）", onclick: lastPos }),
+          h("button", { class: "ghost small", text: "次の未読へ", onclick: nextUnread })
+        ]),
+        msg,
+        h("div", { class: "qleg" }, [
+          h("span", null, [h("i"), "未読"]), h("span", null, [h("i", { class: "read" }), "既読"]),
+          h("span", null, [h("i", { class: "ok" }), "前回 正解"]), h("span", null, [h("i", { class: "ng" }), "前回 不正解"]),
+          h("span", null, ["太い枠＝いま見ている位置"])
+        ]),
+        g
+      ]);
+    }
+    var side = h("aside", { class: "qside" }, [h("div", { class: "qsum", style: "display:none" }), tocBody()]);
+    var topDet = h("details", { class: "more card qtop" }, [h("summary", { text: "目次（番号で移動・既読の状況）" }), tocBody()]);
+    box.appendChild(topDet);
+    var main = h("div", { class: "qmain" }, [
+      h("div", { class: "controls" }, [selDomain, selStatus, kw, h("label", { class: "check" }, [openAll, h("span", { text: "答えと解説をすべて開く" })])]),
+      count, list
+    ]);
+    box.appendChild(h("div", { class: "qlayout" }, [side, main]));
 
     function refresh() {
       bf.domain = selDomain.value; bf.status = selStatus.value; bf.kw = kw.value; bf.open = openAll.checked;
       while (list.firstChild) list.removeChild(list.firstChild);
       var key = bf.kw.trim().toLowerCase();
+      var rm = qreadMap();
       var shown = ALLQ.filter(function (q) {
         var s = stats[q.id];
         if (bf.domain && q.domain !== bf.domain) return false;
+        if (bf.status === "unread" && rm[q.id]) return false;
+        if (bf.status === "read" && !rm[q.id]) return false;
         if (bf.status === "none" && s) return false;
         if (bf.status === "ok" && !(s && s.last === true)) return false;
         if (bf.status === "ng" && !(s && s.last === false)) return false;
         if (bf.status === "ever" && !(s && s.n > s.c)) return false;
         if (key) {
-          var hay = (q.q + " " + q.options.map(function (o) { return o.t; }).join(" ") + " " + q.explain + " " + deepText(q)).toLowerCase();
+          var hay = ("No." + q._no + " " + q.q + " " + q.options.map(function (o) { return o.t; }).join(" ") + " " + q.explain + " " + deepText(q)).toLowerCase();
           if (hay.indexOf(key) < 0) return false;
         }
         return true;
       });
+      shownIds = {};
+      shown.forEach(function (q) { shownIds[q.id] = true; });
       count.textContent = shown.length + " / " + ALLQ.length + " 問を表示中（回答は記録されません）";
-      shown.forEach(function (q) { list.appendChild(questionBlock(q, { open: bf.open, stat: stats[q.id] })); });
+      shown.forEach(function (q) { list.appendChild(questionBlock(q, { open: bf.open, stat: stats[q.id], read: !!rm[q.id], onRead: function () { paint(); } })); });
       if (!shown.length) list.appendChild(h("div", { class: "card", text: "該当する問題がありません。" }));
+      paint();
     }
+    cur = qreadMap()._last || null; if (cur && !QMAP[cur]) cur = null;
     refresh();
+    // いま見ている位置を、スクロールに合わせて追いかける（画面を作り終えたあとに、監視を始める）
+    setTimeout(function () {
+      if (!document.body.contains(list)) return;
+      var raf = 0;
+      qScroll = function () {
+        if (raf) return;
+        raf = requestAnimationFrame(function () {
+          raf = 0;
+          var cs = list.children;
+          for (var i = 0; i < cs.length; i++) {
+            if (cs[i].getBoundingClientRect().bottom > 60) { if (cs[i].id) setCur(cs[i].id.slice(2)); break; }
+          }
+        });
+      };
+      window.addEventListener("scroll", qScroll, { passive: true });
+    }, 0);
     return box;
   }
 
@@ -2031,7 +2231,7 @@
       var s = stats[q.id];
       var short = q.q.length > 44 ? q.q.slice(0, 44) + "…" : q.q;
       t.appendChild(h("tr", { class: "click", onclick: function () { questionDetail(q); } }, [
-        h("td", null, [h("div", { text: short }), h("div", { class: "small", text: q.id + " ／ " + q.domain })]),
+        h("td", null, [h("div", { text: short }), h("div", { class: "small", text: "No." + q._no + " ／ " + q.id + " ／ " + q.domain })]),
         h("td", { class: "num", text: s ? String(s.n) : "—" }),
         h("td", { class: "num", text: s ? String(s.c) : "—" }),
         h("td", { class: "num", text: s ? pct(s.c, s.n) + "%" : "—" }),
