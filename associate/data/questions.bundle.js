@@ -4896,6 +4896,7 @@ window.GLOSSARY = [
     "case": "提案書を5回直して、3〜5回目で変化がほとんどない場合です。"
   }
 ];
+window.FIGS = {};
 window.TEXTBOOK = [
  {
   "id": "a-m0-claude101",
